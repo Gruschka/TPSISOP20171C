@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <commons/config.h>
 
 int main(void) {
 	puts("Holis"); /* prints Holis */
