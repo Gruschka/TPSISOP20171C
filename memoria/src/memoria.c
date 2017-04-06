@@ -1,7 +1,7 @@
 /*
  ============================================================================
  Name        : memoria.c
- Author      : Hernan Canzonetta
+ Author      : Federico Trimboli
  Version     :
  Copyright   : Copyright
  Description : Hello World in C, Ansi-style
