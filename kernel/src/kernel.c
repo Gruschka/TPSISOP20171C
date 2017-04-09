@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <commons/config.h>
 #include <commons/log.h>
+#include <ipc/ipc.h>
 
 //"""Private"""
 static t_config *__config;
@@ -52,4 +53,10 @@ void fetchConfiguration() {
 	configuration->schedulingAlgorithm = ROUND_ROBIN; //TODO: Levantar string y crear enum a partir del valor
 	configuration->multiprogrammingDegree = config_get_int_value(__config, "GRADO_MULTIPROG");
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
+}
+
+void pruebitaCheta() {
+	t_PCB *pcb = malloc(sizeof(pcb));
+
+
 }
