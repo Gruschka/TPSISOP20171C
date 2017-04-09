@@ -38,6 +38,8 @@ int main(int argc, char **argv) {
 	}
 	fetchConfiguration();
 
+	escucharChetito();
+
 	return EXIT_SUCCESS;
 }
 

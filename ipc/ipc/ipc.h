@@ -8,6 +8,6 @@
 #ifndef IPC_H_
 #define IPC_H_
 
-void tuVieja(void);
+int escucharChetito(void);
 
 #endif /* IPC_H_ */
