@@ -39,37 +39,34 @@ void showMenu(){
 	scanf("%d",&menuopt);
 	char program[50];
 
+	do{
+		switch(menuopt){
+		case 1:
+			requestFilePath(program);//Save in program the file path of the file
+			startProgram(program);
+			showMenu(); //Una vez que se inicia un programa, vuelve a mostrar menu
+			break;
 
-	switch(menuopt){
-	case 1:
-		requestFilePath(program);//Save in program the file path of the file
-		startProgram(program);
-		showMenu(); //Una vez que se inicia un programa, vuelve a mostrar menu
-		break;
+		case 2:
+			endProgram();
+			break;
 
-	case 2:
-		endProgram();
-		break;
+		case 3:
+			disconnectConsole();
+			break;
 
-	case 3:
-		disconnectProgram();
-		break;
+		case 4:
+			clearConsole();
+			break;
 
-	case 4:
-		clearConsole();
-		break;
-
-	case 5:
-
-		break;
-
-	default:
-		printf("Invalid input\n");
-		break;
+		default:
+			printf("Invalid input\n");
+			break;
 
 
-	}
+		}
 
+	}while (menuopt != 3);
 }
 void startProgram(char * programPath) {
 
@@ -94,8 +91,8 @@ void endProgram(){
 	printf("\nEnd Program\n");
 
 }
-void disconnectProgram(){
-	printf("\nDisconnect Program\n");
+void disconnectConsole(){
+	printf("\nDisconnecting Console\n");
 
 }
 void clearConsole(){
