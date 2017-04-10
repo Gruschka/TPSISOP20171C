@@ -126,7 +126,7 @@ int connectToKernel(char * program){
 
 	printf("EL programa es: %s", program);
 	printf("\nConnecting to Kernel\n");
-	//Connect to Kernel
+	//Connect to Kernel and Handshake
 	 int sockfd, portno, n;
      struct sockaddr_in serv_addr;
 	 struct hostent *server;
