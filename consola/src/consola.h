@@ -15,5 +15,6 @@ void endProgram();
 void disconnectProgram();
 void clearConsole();
 void *executeProgram(void *arg);
+int connectToKernel(char *);
 
 #endif /* CONSOLA_H_ */

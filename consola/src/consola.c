@@ -82,7 +82,7 @@ void startProgram(char * programPath) {
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
-	pthread_create(&threadId, &attr, executeProgram , NULL);
+	pthread_create(&threadId, &attr, executeProgram, programPath);
 
 	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
@@ -110,8 +110,24 @@ void requestFilePath(char *filePath){
 	//puts(filePath);
 
 }
+
+
+
 void *executeProgram(void *arg){
 
+	char * program = (char *)arg;
+
+	connectToKernel(program);
+
+
+
+
+}
+
+
+int connectToKernel(char * program){
+
+	printf("EL programa es: %s", program);
 	printf("\nConnecting to Kernel\n");
 	//Connect to Kernel
 	 int sockfd, portno, n;
@@ -176,3 +192,5 @@ void *executeProgram(void *arg){
 
 
 }
+
+
