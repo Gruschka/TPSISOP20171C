@@ -10,10 +10,10 @@
 
 
 void showMenu();
-void startProgram(char program);
+void startProgram(char *program);
 void endProgram();
 void disconnectProgram();
 void clearConsole();
-void* executeProgram(void*arg);
+void *executeProgram(void *arg);
 
 #endif /* CONSOLA_H_ */

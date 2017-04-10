@@ -8,15 +8,17 @@
  ============================================================================
  */
 
+#include "consola.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <commons/config.h>
-#include <pthread.h>
-#include <string.h>
 #include <sys/socket.h>
+#include <ipc/ipc.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <netdb.h>
 #include <netinet/in.h>
+#include <string.h>
 #include <unistd.h>
-
 
 
 
@@ -69,7 +71,7 @@ void showMenu(){
 	}
 
 }
-void startProgram(char * programPath){
+void startProgram(char * programPath) {
 
 	printf("\nInitiating:%s\n", programPath);
 
@@ -100,7 +102,7 @@ void clearConsole(){
 	printf("\Clear console\n");
 
 }
-void requestFilePath(char * filePath){
+void requestFilePath(char *filePath){
 
 	printf("\nPlease provide file path\n");
 	getchar();
@@ -108,7 +110,7 @@ void requestFilePath(char * filePath){
 	//puts(filePath);
 
 }
-void* executeProgram(void*arg){
+void *executeProgram(void *arg){
 
 	printf("\nConnecting to Kernel\n");
 	//Connect to Kernel
