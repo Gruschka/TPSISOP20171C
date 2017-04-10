@@ -19,6 +19,7 @@
 #include <string.h>
 #include <unistd.h>
 
+//test
 int main(int argc, char *argv[]) {
    int sockfd, portno, n;
    struct sockaddr_in serv_addr;
@@ -61,7 +62,7 @@ int main(int argc, char *argv[]) {
    n = write(sockfd, buffer, strlen(buffer));
 
    if (n < 0) {
-      perror("ERROR writing to socket");
+      perror("ERROR writinsadaklsdjaskldjakldjaslkdjasklg to socket");
       exit(1);
    }
 
