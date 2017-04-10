@@ -19,6 +19,7 @@
 #include <string.h>
 #include <unistd.h>
 
+//test
 int main(int argc, char *argv[]) {
    int sockfd, portno, n;
    struct sockaddr_in serv_addr;
