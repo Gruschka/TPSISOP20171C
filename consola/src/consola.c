@@ -123,28 +123,34 @@ void *executeProgram(void *arg){
 
 
 int connectToKernel(char * program){
-
-	printf("EL programa es: %s", program);
-	printf("\nConnecting to Kernel\n");
-	//Connect to Kernel and Handshake
-	 int sockfd, portno, n;
-     struct sockaddr_in serv_addr;
-	 struct hostent *server;
-
-	 char buffer[256];
+		FILE* configFile;
+		int sockfd, portno, n;
+		struct sockaddr_in serv_addr;
+		struct hostent *server;
+		char serverIp[30];
+		char buffer[256];
 
 
-    portno = 5000;
+		printf("EL programa es: %s", program);
+		configFile = fopen("/home/utnso/git/tp-2017-1c-Deus-Vult/consola/src/consoleConfig.txt", "r");
+		fscanf(configFile, "%s", serverIp);
+		fscanf(configFile, "%d", &portno);
+		fclose(configFile);
+		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
+		printf("\nConnecting to Kernel\n");
 
-	   /* Create a socket point */
-	   sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		//Connect to Kernel and Handshake
+
+
+		   /* Create a socket point */
+		sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	   if (sockfd < 0) {
 	      perror("ERROR opening socket");
 	      exit(1);
 	   }
 
-	   server = gethostbyname("10.0.1.90");
+	   server = gethostbyname(serverIp);
 	   bzero((char *) &serv_addr, sizeof(serv_addr));
 	   serv_addr.sin_family = AF_INET;
 	   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
