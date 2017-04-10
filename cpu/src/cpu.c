@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
    n = write(sockfd, buffer, strlen(buffer));
 
    if (n < 0) {
-      perror("ERROR writing to socket");
+      perror("ERROR writinsadaklsdjaskldjakldjaslkdjasklg to socket");
       exit(1);
    }
 
