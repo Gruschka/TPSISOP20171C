@@ -3,6 +3,7 @@
 	<name>consola</name>
 	<comment></comment>
 	<projects>
+		<project>ipc</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
