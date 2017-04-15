@@ -51,12 +51,13 @@ void showMenu(){
 
 	int menuopt;
 	printf("\nConsole Menu:\n");
-	printf("1-Start Program\n2-End Program\n3-Disconnect Program\n"
-			"4-Clear Console\n");
-	scanf("%d",&menuopt);
+
 	char program[50];
 
 	do{
+		printf("1-Start Program\n2-End Program\n3-Disconnect Program\n"
+				"4-Clear Console\n");
+		scanf("%d",&menuopt);
 		switch(menuopt){
 		case 1:						 //Start Program
 			requestFilePath(program);//Save in program the file path of the file
@@ -103,18 +104,29 @@ void startProgram(char * programPath) {
 
 
 }
+
+
+
 void endProgram(){
 	printf("\nEnd Program\n");
 
 }
+
+
+
 void disconnectConsole(){
 	printf("\nDisconnecting Console\n");
 
 }
-void clearConsole(){
-	printf("\Clear console\n");
 
+
+void clearConsole(){
+	printf("\Cleanning console\n");
+	system("clear");
+	return;
 }
+
+
 void requestFilePath(char *filePath){
 
 	printf("\nPlease provide file path\n");
@@ -139,8 +151,8 @@ void *executeProgram(void *arg){
 
 int parser_getAnSISOPFromFile(char *name, char **buffer);
 
-int connectToKernel(char * program){
-		FILE* configFile;
+void connectToKernel(char * program){
+
 		int sockfd, n;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
@@ -183,7 +195,7 @@ int connectToKernel(char * program){
 	   n = write(sockfd, buffer, programLength);
 
 	   if (n < 0) {
-	      perror("ERROR writinsadaklsdjaskldjakldjaslkdjasklg to socket");
+	      perror("ERROR sending message to socket");
 	      exit(1);
 	   }
 
@@ -197,7 +209,7 @@ int connectToKernel(char * program){
 	   }
 
 	   printf("%s\n",buffer);
-	   return 0;
+	   return;
 
 
 
