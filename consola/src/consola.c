@@ -21,15 +21,28 @@
 #include <unistd.h>
 #include <commons/config.h>
 #include <commons/log.h>
+#include <commons/collections/list.h>
 
 
 t_config *consoleConfig;
 t_log *logger;
 int portno;
 char *serverIp = 0;
+t_list * processList;
+
+
+typedef struct t_process {
+	pthread_t threadID;
+	int processId;
+} t_process;
+
+
+
+
 
 
 int main(int argc, char **argv) {
+
 	char *logFile = tmpnam(NULL);
 	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
 	if (argc < 2) {
@@ -40,9 +53,12 @@ int main(int argc, char **argv) {
 			serverIp = config_get_string_value(consoleConfig, "IP_KERNEL");
 			portno = config_get_int_value(consoleConfig, "PUERTO_KERNEL");
 	}
+	processList = list_create();
+
 	showMenu();
 
 
+	return 0;
 
 }
 
