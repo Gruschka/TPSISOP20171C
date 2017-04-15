@@ -12,8 +12,7 @@
 
 #include <commons/collections/list.h>
 #include <commons/collections/queue.h>
-
-#include "pcb.h"
+#include <pcb/pcb.h>
 
 typedef enum t_scheduling_algorithm {
 	ROUND_ROBIN,

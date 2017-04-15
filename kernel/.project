@@ -3,7 +3,7 @@
 	<name>kernel</name>
 	<comment></comment>
 	<projects>
-		<project>ipc</project>
+		<project>shared-leto</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
