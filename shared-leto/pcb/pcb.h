@@ -9,6 +9,7 @@
 #define PCB_H_
 
 #include <commons/collections/list.h>
+#include <stdint.h>
 
 typedef struct t_stackVariable {
 	char *id;
