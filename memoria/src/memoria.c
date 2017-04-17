@@ -10,103 +10,170 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-typedef struct mem_virtual_page {
-    int processID;
-    int pageNumber;
-    int nextPageIndex;
-} mem_virtual_page;
+typedef struct mem_table_entry {
+	int32_t frameNumber;
+    int32_t processID;
+    int32_t pageNumber;
+} mem_table_entry;
 
-mem_virtual_page *pages[10];
+static const int32_t k_numberOfFrames = 500;
+static const int32_t k_frameSize = 256;
+static void *memory;
 
-int cantor(int k1, int k2) {
-	return 0.5 * (k1 + k2) * (k1 + k2 + 1) + k2;
+//static int32_t k_numberOfAvailablePages = 100;
+mem_table_entry *tableEntries[500];
+
+int64_t pair(int32_t k1, int32_t k2) {
+	return ((int64_t)k1 << 32) + (int64_t)k2;
 }
 
-int hash(int processID, int virtualPageNumber) {
-	return cantor(processID, virtualPageNumber) % 10;
+int32_t hash(int32_t processID, int32_t pageNumber) {
+	return pair(processID, pageNumber) % k_numberOfFrames;
 }
 
-int isPageEmpty(mem_virtual_page *page) {
-	return page->processID == -1 && page->pageNumber == -1;
+int isEntryAvailable(mem_table_entry *entry) {
+	return entry->processID == -1 && entry->pageNumber == -1;
 }
 
-mem_virtual_page *findUnusedPageForGivenIndex(int index) {
-	mem_virtual_page *page = pages[index];
+mem_table_entry *findAvailableEntryForGivenIndex(int index) {
+	mem_table_entry *entry = tableEntries[index];
 
-	if (isPageEmpty(page)) {
-		return page;
+	if (isEntryAvailable(entry)) {
+		return entry;
 	}
 
-	if (page->nextPageIndex != -1) {
-		return findUnusedPageForGivenIndex(page->nextPageIndex);
-	}
-
-	mem_virtual_page *unusedPage = NULL;
+	mem_table_entry *availableEntry = NULL;
 	int i;
 
-	for (i = index + 1; i < 10; i++) {
-		mem_virtual_page *possiblyUnusedPage = pages[i];
-		if (isPageEmpty(possiblyUnusedPage)) {
-			unusedPage = possiblyUnusedPage;
+	for (i = index + 1; i < k_numberOfFrames; i++) {
+		mem_table_entry *possiblyAvailableEntry = tableEntries[i];
+		if (isEntryAvailable(possiblyAvailableEntry)) {
+			availableEntry = possiblyAvailableEntry;
 			break;
 		}
 	}
 
-	if (unusedPage != NULL) {
-		page->nextPageIndex = i;
-		return unusedPage;
+	if (availableEntry != NULL) {
+		return availableEntry;
 	}
 
 	for (i = index - 1; i >= 0; i--) {
-			mem_virtual_page *possiblyUnusedPage = pages[i];
-			if (isPageEmpty(possiblyUnusedPage)) {
-				unusedPage = possiblyUnusedPage;
+		mem_table_entry *possiblyAvailableEntry = tableEntries[i];
+			if (isEntryAvailable(possiblyAvailableEntry)) {
+				availableEntry = possiblyAvailableEntry;
 				break;
 			}
 		}
 
-	if (unusedPage != NULL) {
-		page->nextPageIndex = i;
-		return unusedPage;
+	if (availableEntry != NULL) {
+		return availableEntry;
 	}
 
 	return NULL;
 }
 
-int mem_alloc(int processID, int virtualPageNumber) {
-	int index = hash(processID, virtualPageNumber);
-	mem_virtual_page *page = findUnusedPageForGivenIndex(index);
-
-	if (page == NULL) {
-		return -1;
+int doesEntryMatchProcessAndPageNumber(mem_table_entry *entry, int32_t processID, int32_t pageNumber) {
+	if (entry->processID == processID && entry->pageNumber == pageNumber) {
+		return 1;
 	}
 
-	page->processID = processID;
-	page->pageNumber = virtualPageNumber;
 	return 0;
 }
 
-int main(void) {
-	int i;
-	for (i = 0; i < 10; i++) {
-		 mem_virtual_page *page = malloc(sizeof(mem_virtual_page));
-		 page->processID = -1;
-		 page->pageNumber = -1;
-		 page->nextPageIndex = -1;
-		 pages[i] = page;
+mem_table_entry *findEntry(int32_t processID, int32_t pageNumber) {
+	int32_t index = hash(processID, pageNumber);
+	mem_table_entry *entry = NULL;
+
+	int32_t i = index;
+	do {
+		mem_table_entry *possibleEntry = tableEntries[i];
+		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
+			entry = possibleEntry;
+			break;
+		}
+		i++;
+	} while (index < k_numberOfFrames);
+
+	if (entry != NULL) {
+		return entry;
 	}
 
-	printf("%d", mem_alloc(0, 5));
-	printf("%d", mem_alloc(10, 2));
-	printf("%d", mem_alloc(2, 3));
-	printf("%d", mem_alloc(10, 1));
-	printf("%d", mem_alloc(3, 1));
-	printf("%d", mem_alloc(1, 2));
-	printf("%d", mem_alloc(21, 4));
-	printf("%d", mem_alloc(2, 2));
-	printf("%d", mem_alloc(31, 5));
-	printf("%d", mem_alloc(100, 100));
+	i = index - 1;
+	if (i < 0) { return NULL; }
+	do {
+		mem_table_entry *possibleEntry = tableEntries[i];
+		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
+			entry = possibleEntry;
+			break;
+		}
+		i--;
+	} while (index >= 0);
+
+	return entry;
+}
+
+int offsetAndSizeAreValid(int32_t offset, int32_t size) {
+	if (size == 0) { return 0; }
+	return (offset + size) <= k_frameSize;
+}
+
+//////// Interfaz pública
+
+void initProcess(int32_t processID, int32_t numberOfPages) {
+
+}
+
+void *valueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size) {
+	if (!offsetAndSizeAreValid(offset, size)) { return 0; }
+
+	mem_table_entry *entry = findEntry(processID, pageNumber);
+	void *pointer = memory + (entry->frameNumber * k_frameSize) + offset;
+	void *buffer = malloc(size);
+	memcpy(buffer, pointer, size);
+	return buffer;
+}
+
+int saveValueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size, void *buffer) {
+	if (!offsetAndSizeAreValid(offset, size)) { return 0; }
+
+	int index = hash(processID, pageNumber);
+	mem_table_entry *entry = findAvailableEntryForGivenIndex(index);
+	if (entry == NULL) { return 0; }
+	entry->processID = processID;
+	entry->pageNumber = pageNumber;
+	void *pointer = memory + (entry->frameNumber * k_frameSize) + offset;
+	memcpy(pointer, buffer, size);
+	return 1;
+}
+
+void addPagesToExistingProcess(int32_t processID, int32_t numberOfPages) {
+
+}
+
+void deinitProcessMemory(int32_t processID) {
+
+}
+
+//////// Fin de interfaz pública
+
+int main(void) {
+	memory = calloc(k_numberOfFrames, k_frameSize);
+
+	int i;
+	for (i = 0; i < k_numberOfFrames; i++) {
+		mem_table_entry *entry = malloc(sizeof(mem_table_entry));
+		entry->frameNumber = i;
+		entry->processID = -1;
+		entry->pageNumber = -1;
+		tableEntries[i] = entry;
+	}
+
+	char *texto = "esto es una prueba capo";
+	saveValueFor(0, 0, 233, 23, texto);
+
+	char *meTraje = valueFor(0, 0, 233, 23);
 
 	return EXIT_SUCCESS;
 }
