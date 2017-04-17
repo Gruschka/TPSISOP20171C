@@ -19,13 +19,46 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <unistd.h>
+#include <commons/config.h>
+#include <commons/log.h>
+#include <commons/collections/list.h>
+
+
+t_config *consoleConfig;
+t_log *logger;
+int portno;
+char *serverIp = 0;
+t_list * processList;
+
+
+typedef struct t_process {
+	pthread_t threadID;
+	int processId;
+} t_process;
 
 
 
 
-int main(void) {
+
+
+int main(int argc, char **argv) {
+
+	char *logFile = tmpnam(NULL);
+	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
+	if (argc < 2) {
+			log_error(logger, "Falta pasar la ruta del archivo de configuracion");
+			return EXIT_FAILURE;
+		} else {
+			consoleConfig = config_create(argv[1]);
+			serverIp = config_get_string_value(consoleConfig, "IP_KERNEL");
+			portno = config_get_int_value(consoleConfig, "PUERTO_KERNEL");
+	}
+	processList = list_create();
 
 	showMenu();
+
+
+	return 0;
 
 }
 
@@ -34,28 +67,28 @@ void showMenu(){
 
 	int menuopt;
 	printf("\nConsole Menu:\n");
-	printf("1-Start Program\n2-End Program\n3-Disconnect Program\n"
-			"4-Clear Console\n");
-	scanf("%d",&menuopt);
+
 	char program[50];
 
 	do{
+		printf("1-Start Program\n2-End Program\n3-Disconnect Program\n"
+				"4-Clear Console\n");
+		scanf("%d",&menuopt);
 		switch(menuopt){
-		case 1:
+		case 1:						 //Start Program
 			requestFilePath(program);//Save in program the file path of the file
 			startProgram(program);
-			showMenu(); //Una vez que se inicia un programa, vuelve a mostrar menu
 			break;
 
-		case 2:
+		case 2:						 //End Program
 			endProgram();
 			break;
 
-		case 3:
+		case 3:						 //Disconnect Program
 			disconnectConsole();
 			break;
 
-		case 4:
+		case 4:						 //Clear Console
 			clearConsole();
 			break;
 
@@ -87,18 +120,29 @@ void startProgram(char * programPath) {
 
 
 }
+
+
+
 void endProgram(){
 	printf("\nEnd Program\n");
 
 }
+
+
+
 void disconnectConsole(){
 	printf("\nDisconnecting Console\n");
 
 }
-void clearConsole(){
-	printf("\Clear console\n");
 
+
+void clearConsole(){
+	printf("\Cleanning console\n");
+	system("clear");
+	return;
 }
+
+
 void requestFilePath(char *filePath){
 
 	printf("\nPlease provide file path\n");
@@ -116,26 +160,22 @@ void *executeProgram(void *arg){
 
 	connectToKernel(program);
 
-
+	return NULL;
 
 
 }
 
+int parser_getAnSISOPFromFile(char *name, char **buffer);
 
-int connectToKernel(char * program){
-		FILE* configFile;
-		int sockfd, portno, n;
+void connectToKernel(char * program){
+
+		int sockfd, n;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
-		char serverIp[30];
-		char buffer[256];
-
+		char *buffer = 0;
+		int programLength;
 
 		printf("EL programa es: %s", program);
-		configFile = fopen("/home/utnso/git/tp-2017-1c-Deus-Vult/consola/src/consoleConfig.txt", "r");
-		fscanf(configFile, "%s", serverIp);
-		fscanf(configFile, "%d", &portno);
-		fclose(configFile);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
 		printf("\nConnecting to Kernel\n");
 
@@ -162,19 +202,16 @@ int connectToKernel(char * program){
 	      exit(1);
 	   }
 
-	   /* Now ask for a message from the user, this message
-	      * will be read by server
-	   */
+	   // Now sends the program and is read by server
 
-	   printf("Please enter the message: ");
-	   bzero(buffer,256);
-	   fgets(buffer,255,stdin);
+
+	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
 	   /* Send message to the server */
-	   n = write(sockfd, buffer, strlen(buffer));
+	   n = write(sockfd, buffer, programLength);
 
 	   if (n < 0) {
-	      perror("ERROR writinsadaklsdjaskldjakldjaslkdjasklg to socket");
+	      perror("ERROR sending message to socket");
 	      exit(1);
 	   }
 
@@ -188,12 +225,46 @@ int connectToKernel(char * program){
 	   }
 
 	   printf("%s\n",buffer);
-	   return 0;
+	   return;
 
 
 
 
 
+}
+
+
+//File Manager
+int parser_getAnSISOPFromFile(char *name, char **buffer){
+	FILE *file;
+	unsigned long fileLen;
+
+	//Open file
+	file = fopen(name, "rb");
+	if (!file)
+	{
+	fprintf(stderr, "Unable to open file %s", name);
+	}
+
+	//Get file length
+	fseek(file, 0, SEEK_END);
+	fileLen=ftell(file);
+	fseek(file, 0, SEEK_SET);
+
+	//Allocate memory
+	*buffer=(char *)malloc(fileLen+1);
+	if (!*buffer)
+	{
+		fprintf(stderr, "Memory error!");
+		fclose(file);
+	}
+
+	//Read file contents into buffer
+	fread(*buffer, fileLen, 1, file);
+	fclose(file);
+
+	//Do what ever with buffer
+	return fileLen;
 }
 
 
