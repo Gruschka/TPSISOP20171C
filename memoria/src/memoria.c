@@ -18,6 +18,7 @@ typedef unsigned char mem_bool;
 typedef struct mem_page_entry {
     int32_t processID;
     int32_t processPageNumber;
+    mem_bool isAvailable;
 } mem_page_entry;
 
 static const u_int32_t k_numberOfFrames = 500;
@@ -41,16 +42,12 @@ void *getPagePointerForIndex(int index) {
 	return physicalMemory + ((k_numberOfFrames - k_numberOfPages + index) * k_frameSize);
 }
 
-mem_bool isEntryAvailable(mem_page_entry *entry) {
-	return entry->processID == -1 && entry->processPageNumber == -1;
-}
-
 int findAvailablePageIndexGivenHash(int hash) {
 	mem_page_entry *availableEntry = NULL;
 	int i;
 	for (i = hash; i < k_numberOfPages; i++) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryForIndex(i);
-		if (isEntryAvailable(possiblyAvailableEntry)) {
+		if (possiblyAvailableEntry->isAvailable) {
 			availableEntry = possiblyAvailableEntry;
 			break;
 		}
@@ -62,7 +59,7 @@ int findAvailablePageIndexGivenHash(int hash) {
 
 	for (i = hash - 1; i >= 0; i--) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryForIndex(i);
-			if (isEntryAvailable(possiblyAvailableEntry)) {
+			if (possiblyAvailableEntry->isAvailable) {
 				availableEntry = possiblyAvailableEntry;
 				break;
 			}
@@ -170,6 +167,7 @@ int main(void) {
 		mem_page_entry *entry = getPageEntryForIndex(i);
 		entry->processID = -1;
 		entry->processPageNumber = -1;
+		entry->isAvailable = 1;
 	}
 
 	char *texto = "esto es una prueba capo";
