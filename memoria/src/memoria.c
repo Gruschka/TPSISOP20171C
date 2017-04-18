@@ -11,44 +11,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
-typedef struct mem_table_entry {
-	int32_t frameNumber;
+typedef unsigned char mem_bool;
+
+typedef struct mem_page_entry {
     int32_t processID;
-    int32_t pageNumber;
-} mem_table_entry;
+    int32_t processPageNumber;
+} mem_page_entry;
 
-static const int32_t k_numberOfFrames = 500;
-static const int32_t k_frameSize = 256;
-static void *memory;
+static const u_int32_t k_numberOfFrames = 500;
+static const u_int32_t k_frameSize = 256;
+static void *physicalMemory;
+static u_int32_t k_numberOfPages;
 
-//static int32_t k_numberOfAvailablePages = 100;
-mem_table_entry *tableEntries[500];
-
-int64_t pair(int32_t k1, int32_t k2) {
+int64_t calculatePair(int32_t k1, int32_t k2) {
 	return ((int64_t)k1 << 32) + (int64_t)k2;
 }
 
-int32_t hash(int32_t processID, int32_t pageNumber) {
-	return pair(processID, pageNumber) % k_numberOfFrames;
+int32_t calculateHash(int32_t processID, int32_t pageNumber) {
+	return calculatePair(processID, pageNumber) % k_numberOfFrames;
 }
 
-int isEntryAvailable(mem_table_entry *entry) {
-	return entry->processID == -1 && entry->pageNumber == -1;
+mem_page_entry *getPageEntryForIndex(int index) {
+	return physicalMemory + index * sizeof(mem_page_entry);
 }
 
-mem_table_entry *findAvailableEntryForGivenIndex(int index) {
-	mem_table_entry *entry = tableEntries[index];
+void *getPagePointerForIndex(int index) {
+	return physicalMemory + ((k_numberOfFrames - k_numberOfPages + index) * k_frameSize);
+}
 
-	if (isEntryAvailable(entry)) {
-		return entry;
-	}
+mem_bool isEntryAvailable(mem_page_entry *entry) {
+	return entry->processID == -1 && entry->processPageNumber == -1;
+}
 
-	mem_table_entry *availableEntry = NULL;
+int findAvailablePageIndexGivenHash(int hash) {
+	mem_page_entry *availableEntry = NULL;
 	int i;
-
-	for (i = index + 1; i < k_numberOfFrames; i++) {
-		mem_table_entry *possiblyAvailableEntry = tableEntries[i];
+	for (i = hash; i < k_numberOfPages; i++) {
+		mem_page_entry *possiblyAvailableEntry = getPageEntryForIndex(i);
 		if (isEntryAvailable(possiblyAvailableEntry)) {
 			availableEntry = possiblyAvailableEntry;
 			break;
@@ -56,11 +57,11 @@ mem_table_entry *findAvailableEntryForGivenIndex(int index) {
 	}
 
 	if (availableEntry != NULL) {
-		return availableEntry;
+		return i;
 	}
 
-	for (i = index - 1; i >= 0; i--) {
-		mem_table_entry *possiblyAvailableEntry = tableEntries[i];
+	for (i = hash - 1; i >= 0; i--) {
+		mem_page_entry *possiblyAvailableEntry = getPageEntryForIndex(i);
 			if (isEntryAvailable(possiblyAvailableEntry)) {
 				availableEntry = possiblyAvailableEntry;
 				break;
@@ -68,53 +69,53 @@ mem_table_entry *findAvailableEntryForGivenIndex(int index) {
 		}
 
 	if (availableEntry != NULL) {
-		return availableEntry;
+		return i;
 	}
 
-	return NULL;
+	return -1;
 }
 
-int doesEntryMatchProcessAndPageNumber(mem_table_entry *entry, int32_t processID, int32_t pageNumber) {
-	if (entry->processID == processID && entry->pageNumber == pageNumber) {
+mem_bool doesEntryMatchProcessAndPageNumber(mem_page_entry *entry, int32_t processID, int32_t pageNumber) {
+	if (entry->processID == processID && entry->processPageNumber == pageNumber) {
 		return 1;
 	}
 
 	return 0;
 }
 
-mem_table_entry *findEntry(int32_t processID, int32_t pageNumber) {
-	int32_t index = hash(processID, pageNumber);
-	mem_table_entry *entry = NULL;
+int findPageIndex(int32_t processID, int32_t pageNumber) {
+	int32_t hash = calculateHash(processID, pageNumber);
+	mem_page_entry *entry = NULL;
 
-	int32_t i = index;
-	do {
-		mem_table_entry *possibleEntry = tableEntries[i];
+	int32_t i;
+	for (i = hash; i < k_numberOfPages; i++) {
+		mem_page_entry *possibleEntry = getPageEntryForIndex(i);
 		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
 			entry = possibleEntry;
 			break;
 		}
-		i++;
-	} while (index < k_numberOfFrames);
-
-	if (entry != NULL) {
-		return entry;
 	}
 
-	i = index - 1;
-	if (i < 0) { return NULL; }
-	do {
-		mem_table_entry *possibleEntry = tableEntries[i];
+	if (entry != NULL) {
+		return i;
+	}
+
+	for (i = hash - 1; i >= 0; i--) {
+		mem_page_entry *possibleEntry = getPageEntryForIndex(i);
 		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
 			entry = possibleEntry;
 			break;
 		}
-		i--;
-	} while (index >= 0);
+	}
 
-	return entry;
+	if (entry != NULL) {
+		return i;
+	}
+
+	return -1;
 }
 
-int offsetAndSizeAreValid(int32_t offset, int32_t size) {
+mem_bool areOffsetAndSizeValid(int32_t offset, int32_t size) {
 	if (size == 0) { return 0; }
 	return (offset + size) <= k_frameSize;
 }
@@ -126,24 +127,25 @@ void initProcess(int32_t processID, int32_t numberOfPages) {
 }
 
 void *valueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size) {
-	if (!offsetAndSizeAreValid(offset, size)) { return 0; }
+	if (!areOffsetAndSizeValid(offset, size)) { return 0; }
 
-	mem_table_entry *entry = findEntry(processID, pageNumber);
-	void *pointer = memory + (entry->frameNumber * k_frameSize) + offset;
+	int pageIndex = findPageIndex(processID, pageNumber);
+	void *pointer = getPagePointerForIndex(pageIndex) + offset;
 	void *buffer = malloc(size);
 	memcpy(buffer, pointer, size);
 	return buffer;
 }
 
 int saveValueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size, void *buffer) {
-	if (!offsetAndSizeAreValid(offset, size)) { return 0; }
+	if (!areOffsetAndSizeValid(offset, size)) { return 0; }
 
-	int index = hash(processID, pageNumber);
-	mem_table_entry *entry = findAvailableEntryForGivenIndex(index);
-	if (entry == NULL) { return 0; }
+	int hash = calculateHash(processID, pageNumber);
+	int pageIndex = findAvailablePageIndexGivenHash(hash);
+	if (pageIndex == -1) { return 0; }
+	mem_page_entry *entry = getPageEntryForIndex(pageIndex);
 	entry->processID = processID;
-	entry->pageNumber = pageNumber;
-	void *pointer = memory + (entry->frameNumber * k_frameSize) + offset;
+	entry->processPageNumber = pageNumber;
+	void *pointer = getPagePointerForIndex(pageIndex) + offset;
 	memcpy(pointer, buffer, size);
 	return 1;
 }
@@ -159,15 +161,15 @@ void deinitProcessMemory(int32_t processID) {
 //////// Fin de interfaz pública
 
 int main(void) {
-	memory = calloc(k_numberOfFrames, k_frameSize);
+	int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
+	physicalMemory = malloc(totalNumberOfBytes);
+	k_numberOfPages = floor(totalNumberOfBytes / (k_frameSize + sizeof(mem_page_entry)));
 
 	int i;
-	for (i = 0; i < k_numberOfFrames; i++) {
-		mem_table_entry *entry = malloc(sizeof(mem_table_entry));
-		entry->frameNumber = i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryForIndex(i);
 		entry->processID = -1;
-		entry->pageNumber = -1;
-		tableEntries[i] = entry;
+		entry->processPageNumber = -1;
 	}
 
 	char *texto = "esto es una prueba capo";
