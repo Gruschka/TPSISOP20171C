@@ -21,8 +21,7 @@ int mem_process_allocation_isProcessAlreadyInitialized(int32_t processID) {
 }
 
 int mem_process_allocation_initProcessWithPages(int32_t processID, int32_t numberOfPages) {
-	void *node = mem_process_allocation_list_getNode(processID, list);
-	if (node != NULL) { return 0; }
+	if (mem_process_allocation_isProcessAlreadyInitialized(processID)) { return 0; }
 	mem_process_allocation_entry entry = { processID, numberOfPages };
 	mem_process_allocation_list_add(entry, list);
 }
