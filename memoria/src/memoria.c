@@ -74,14 +74,6 @@ int findAvailablePageIndex(int32_t processID, int32_t pageNumber) {
 	return -1;
 }
 
-mem_bool doesEntryMatchProcessAndPageNumber(mem_page_entry *entry, int32_t processID, int32_t pageNumber) {
-	if (entry->processID == processID && entry->processPageNumber == pageNumber) {
-		return 1;
-	}
-
-	return 0;
-}
-
 int findPageIndex(int32_t processID, int32_t pageNumber) {
 	int32_t hash = calculateHash(processID, pageNumber);
 	mem_page_entry *entry = NULL;
@@ -89,7 +81,7 @@ int findPageIndex(int32_t processID, int32_t pageNumber) {
 	int32_t i;
 	for (i = hash; i < k_numberOfPages; i++) {
 		mem_page_entry *possibleEntry = getPageEntryForIndex(i);
-		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
+		if (possibleEntry->processID == processID && possibleEntry->processPageNumber == pageNumber) {
 			entry = possibleEntry;
 			break;
 		}
@@ -101,7 +93,7 @@ int findPageIndex(int32_t processID, int32_t pageNumber) {
 
 	for (i = hash - 1; i >= 0; i--) {
 		mem_page_entry *possibleEntry = getPageEntryForIndex(i);
-		if (doesEntryMatchProcessAndPageNumber(possibleEntry, processID, pageNumber)) {
+		if (possibleEntry->processID == processID && possibleEntry->processPageNumber == pageNumber) {
 			entry = possibleEntry;
 			break;
 		}
