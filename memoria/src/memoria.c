@@ -42,7 +42,9 @@ void *getPagePointerForIndex(int index) {
 	return physicalMemory + ((k_numberOfFrames - k_numberOfPages + index) * k_frameSize);
 }
 
-int findAvailablePageIndexGivenHash(int hash) {
+int findAvailablePageIndex(int32_t processID, int32_t pageNumber) {
+	int hash = calculateHash(processID, pageNumber);
+
 	mem_page_entry *availableEntry = NULL;
 	int i;
 	for (i = hash; i < k_numberOfPages; i++) {
@@ -117,27 +119,83 @@ mem_bool areOffsetAndSizeValid(int32_t offset, int32_t size) {
 	return (offset + size) <= k_frameSize;
 }
 
-//////// Interfaz pública
-
-void initProcess(int32_t processID, int32_t numberOfPages) {
-
+int isProcessAlreadyInitialized(int32_t processID) {
+	int i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryForIndex(i);
+		if (entry->processID == processID) {
+			return 1;
+		}
+	}
+	return 0;
 }
 
-void *valueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size) {
-	if (!areOffsetAndSizeValid(offset, size)) { return 0; }
+int hasMemoryAvailablePages(int32_t numberOfPages) {
+	int availablePages = 0;
+
+	int i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryForIndex(i);
+		if (entry->isAvailable) {
+			availablePages += 1;
+			if (availablePages == numberOfPages) {
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+int assignPageToProcess(int32_t processID, int32_t pageNumber) {
+	int pageIndex = findPageIndex(processID, pageNumber);
+	if (pageIndex != -1) { return 0; }
+
+	pageIndex = findAvailablePageIndex(processID, pageNumber);
+	if (pageIndex == -1) { return 0; }
+	mem_page_entry *entry = getPageEntryForIndex(pageIndex);
+	entry->processID = processID;
+	entry->processPageNumber = pageNumber;
+	entry->isAvailable = 0;
+	return 1;
+}
+
+//////// Interfaz pública
+
+int mem_initProcess(int32_t processID, int32_t numberOfPages) {
+	if (isProcessAlreadyInitialized(processID)) {
+		return 0;
+	}
+
+	if (!hasMemoryAvailablePages(numberOfPages)) {
+		return 0;
+	}
+
+	int i;
+	for (i = 0; i < numberOfPages; i++) {
+		assignPageToProcess(processID, i);
+	}
+
+	return 1;
+}
+
+void *mem_read(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size) {
+	if (!isProcessAlreadyInitialized(processID)) { return NULL; }
+	if (!areOffsetAndSizeValid(offset, size)) { return NULL; }
 
 	int pageIndex = findPageIndex(processID, pageNumber);
+	if (pageIndex == -1) { return NULL; }
+
 	void *pointer = getPagePointerForIndex(pageIndex) + offset;
 	void *buffer = malloc(size);
 	memcpy(buffer, pointer, size);
 	return buffer;
 }
 
-int saveValueFor(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size, void *buffer) {
+int mem_write(int32_t processID, int32_t pageNumber, int32_t offset, int32_t size, void *buffer) {
+	if (!isProcessAlreadyInitialized(processID)) { return 0; }
 	if (!areOffsetAndSizeValid(offset, size)) { return 0; }
 
-	int hash = calculateHash(processID, pageNumber);
-	int pageIndex = findAvailablePageIndexGivenHash(hash);
+	int pageIndex = findPageIndex(processID, pageNumber);
 	if (pageIndex == -1) { return 0; }
 	mem_page_entry *entry = getPageEntryForIndex(pageIndex);
 	entry->processID = processID;
@@ -170,10 +228,21 @@ int main(void) {
 		entry->isAvailable = 1;
 	}
 
-	char *texto = "esto es una prueba capo";
-	saveValueFor(0, 0, 233, 23, texto);
+	int a = mem_initProcess(0, 10);
+	int b = mem_initProcess(1, 10);
+	int c = mem_initProcess(2, 10);
+	int d = mem_initProcess(0, 1);
 
-	char *meTraje = valueFor(0, 0, 233, 23);
+	char *texto = "esto es una prueba capo";
+	int a1 = mem_write(0, 0, 0, 23, texto);
+	int a2 = mem_write(0, 9, 0, 23, texto);
+	int a3 = mem_write(1, 2, 0, 23, texto);
+	int a4 = mem_write(0, 10, 0, 23, texto);
+
+	char *meTraje1 = mem_read(0, 0, 0, 23);
+	char *meTraje2 = mem_read(0, 9, 0, 23);
+	char *meTraje3 = mem_read(1, 2, 0, 23);
+	char *meTraje4 = mem_read(0, 10, 0, 23);
 
 	return EXIT_SUCCESS;
 }
