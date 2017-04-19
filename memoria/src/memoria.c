@@ -213,9 +213,7 @@ int mem_write(int32_t processID, int32_t pageNumber, int32_t offset, int32_t siz
 
 	int pageIndex = findPageIndex(processID, pageNumber);
 	if (pageIndex == -1) { return 0; }
-	mem_page_entry *entry = getPageEntryPointerForIndex(pageIndex);
-	entry->processID = processID;
-	entry->processPageNumber = pageNumber;
+
 	void *pointer = getFramePointerForPageIndex(pageIndex) + offset;
 	memcpy(pointer, buffer, size);
 	return 1;
