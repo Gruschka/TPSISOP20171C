@@ -8,12 +8,7 @@
 #ifndef SOCKETS_H_
 #define SOCKETS_H_
 
-#include <stdint.h>
 #include "serialization.h"
-
-typedef struct header {
-	uint32_t operationIdentifier;
-} ipc_header;
 
 typedef void (*EpollConnectionEventHandler)(int fd);
 typedef EpollConnectionEventHandler EpollDisconnectionEventHandler;

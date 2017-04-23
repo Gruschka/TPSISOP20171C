@@ -9,6 +9,7 @@
 #define KERNEL_H_
 
 #include "scheduling.h"
+#include <ipc/ipc.h>
 
 typedef struct t_kernel_config {
 	int programsPort;
@@ -26,5 +27,11 @@ typedef struct t_kernel_config {
 } t_kernel_config;
 
 void fetchConfiguration();
+
+void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer);
+
+void consolesServerSocket_handleNewConnection(int fd);
+
+void consolesServerSocket_handleDisconnection(int fd);
 
 #endif /* KERNEL_H_ */

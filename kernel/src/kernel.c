@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <commons/config.h>
 #include <commons/log.h>
-#include <ipc/ipc.h>
 
 //"""Private"""
 static t_config *__config;
@@ -38,7 +37,7 @@ int main(int argc, char **argv) {
 	}
 	fetchConfiguration();
 
-	ipc_createServer("5000");
+	ipc_createServer("5000", consolesServerSocket_handleNewConnection, consolesServerSocket_handleDisconnection, consolesServerSocket_handleDeserializedStruct);
 
 	return EXIT_SUCCESS;
 }
@@ -57,8 +56,23 @@ void fetchConfiguration() {
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
 }
 
-void pruebitaCheta() {
-	t_PCB *pcb = malloc(sizeof(pcb));
+void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer) {
+	switch (operationId) {
+		case HANDSHAKE: {
+			ipc_struct_handshake *handshake = buffer;
+			log_info(logger, "Handshake received. Process identifier: %d", handshake->processIdentifier);
+			ipc_server_sendHandshakeResponse(fd, 1);
+			break;
+		}
+		default:
+			break;
+	}
+}
 
+void consolesServerSocket_handleNewConnection(int fd) {
+	log_info(logger, "New connection. fd: %d", fd);
+}
 
+void consolesServerSocket_handleDisconnection(int fd) {
+	log_info(logger, "New disconnection. fd: %d", fd);
 }

@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <ipc/ipc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <netdb.h>
@@ -22,6 +21,9 @@
 #include <commons/config.h>
 #include <commons/log.h>
 #include <commons/collections/list.h>
+
+#include <ipc/serialization.h>
+#include <ipc/ipc.h>
 
 
 t_config *consoleConfig;
@@ -202,8 +204,12 @@ void connectToKernel(char * program){
 	      exit(1);
 	   }
 
-	   // Now sends the program and is read by server
+	   // Send handshake and wait for response
+	   ipc_client_sendHandshake(CONSOLE, sockfd);
+	   ipc_client_waitHandshakeResponse(sockfd);
+	   ipc_struct_handshake_response a;
 
+	   // Now sends the program and is read by server
 
 	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
@@ -266,5 +272,3 @@ int parser_getAnSISOPFromFile(char *name, char **buffer){
 	//Do what ever with buffer
 	return fileLen;
 }
-
-

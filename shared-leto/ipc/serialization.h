@@ -7,6 +7,11 @@
 
 #ifndef SERIALIZATION_H_
 #define SERIALIZATION_H_
+#include <stdint.h>
+
+typedef struct header {
+	uint32_t operationIdentifier;
+} __attribute__((packed)) ipc_header;
 
 typedef enum {
 	HANDSHAKE,
@@ -24,8 +29,14 @@ typedef enum {
 } ipc_processIdentifier;
 
 typedef struct handshake {
+	ipc_header header;
 	ipc_processIdentifier processIdentifier;
 } __attribute__((packed)) ipc_struct_handshake;
+
+typedef struct handshake_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_handshake_response;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 

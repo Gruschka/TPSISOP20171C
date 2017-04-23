@@ -197,17 +197,21 @@ int createServer(char *port, EpollConnectionEventHandler newConnectionHandler, E
                  completely, as we are running in edge-triggered mode
                  and won't get a notification again for the same
                  data. */
-              char buffer[sizeof(ipc_header)];
+              void *buffer = malloc(sizeof(ipc_header));
               ssize_t count;
-              count = read(events[i].data.fd, buffer, sizeof(ipc_header));
+              count = recv(events[i].data.fd, buffer, sizeof(ipc_header), MSG_PEEK);
 
               if (count == sizeof(ipc_header)) {
-            	  ipc_header header;
-            	  memcpy(&header, buffer, sizeof(ipc_header));
-            	  incomingDataHandler(events[i].data.fd, header);
+            	  ipc_header *header = malloc(sizeof(ipc_header));
+            	  memcpy(header, buffer, sizeof(ipc_header));
+            	  incomingDataHandler(events[i].data.fd, *header);
               } else if (count == 0) {
             	  disconnectionHandler(events[i].data.fd);
+              } else {
+            	  // Manejar error
               }
+
+              free(buffer);
 
 //              while (1)
 //                {
