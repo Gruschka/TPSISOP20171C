@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+
 #include <commons/config.h>
 #include <commons/log.h>
 
@@ -25,7 +27,13 @@ t_log *logger;
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
+
+#ifdef DEBUG
 	logger = log_create(logFile, "KERNEL", 1, LOG_LEVEL_DEBUG);
+#else
+	logger = log_create(logFile, "KERNEL", 1, LOG_LEVEL_INFO);
+#endif
+
 	log_info(logger, "Comenzó la ejecución");
 	log_info(logger, "Log file: %s", logFile);
 
@@ -36,10 +44,23 @@ int main(int argc, char **argv) {
 		__config = config_create(argv[1]);
 		configuration = malloc(sizeof(t_kernel_config));
 	}
+
 	fetchConfiguration();
 
-	ipc_createServer("5000", consolesServerSocket_handleNewConnection, consolesServerSocket_handleDisconnection, consolesServerSocket_handleDeserializedStruct);
+	pthread_t threadId;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
 
+	pthread_create(&threadId, &attr, consolesServer_main, NULL);
+
+	pthread_join(threadId, NULL);
+
+	return EXIT_SUCCESS;
+}
+
+void *consolesServer_main(void *args) {
+	//TODO: Pasarle el puerto por archivo de config
+	ipc_createServer("5000", consolesServerSocket_handleNewConnection, consolesServerSocket_handleDisconnection, consolesServerSocket_handleDeserializedStruct);
 	return EXIT_SUCCESS;
 }
 
@@ -61,7 +82,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifi
 	switch (operationId) {
 		case HANDSHAKE: {
 			ipc_struct_handshake *handshake = buffer;
-			log_info(logger, "Handshake received. Process identifier: %d", handshake->processIdentifier);
+			log_info(logger, "Handshake received. Process identifier: %s", processName(handshake->processIdentifier));
 			ipc_server_sendHandshakeResponse(fd, 1);
 			break;
 		}

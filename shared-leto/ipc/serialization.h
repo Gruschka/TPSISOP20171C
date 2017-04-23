@@ -27,6 +27,7 @@ typedef enum {
 	FILESYSTEM,
 	CPU,
 } ipc_processIdentifier;
+char *processName(ipc_processIdentifier processIdentifier);
 
 typedef struct handshake {
 	ipc_header header;

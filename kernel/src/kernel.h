@@ -28,6 +28,8 @@ typedef struct t_kernel_config {
 
 void fetchConfiguration();
 
+void *consolesServer_main(void *args);
+
 void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer);
 
 void consolesServerSocket_handleNewConnection(int fd);
