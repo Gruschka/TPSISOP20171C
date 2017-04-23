@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 	}
 	fetchConfiguration();
 
-	escucharChetito();
+	ipc_createServer("5000");
 
 	return EXIT_SUCCESS;
 }
