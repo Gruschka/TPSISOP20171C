@@ -17,6 +17,10 @@
 #include <sys/epoll.h>
 #include <errno.h>
 
+#include <commons/log.h>
+
+extern t_log *logger;
+
 #define MAXEVENTS 64
 
 int make_socket_non_blocking (int sfd)
@@ -71,7 +75,7 @@ int create_and_bind (char *port) {
 
   if (rp == NULL)
     {
-      fprintf (stderr, "Could not bind\n");
+      log_error(logger, "Could not bind");
       return -1;
     }
 
@@ -168,8 +172,7 @@ int createServer(char *port, EpollConnectionEventHandler newConnectionHandler, E
                                    NI_NUMERICHOST | NI_NUMERICSERV);
                   if (s == 0)
                     {
-                      printf("Accepted connection on descriptor %d "
-                             "(host=%s, port=%s)\n", infd, hbuf, sbuf);
+                	  log_debug(logger, "New connection. IP: %s", hbuf);
                     }
 
                   /* Make the incoming socket non-blocking and add it to the

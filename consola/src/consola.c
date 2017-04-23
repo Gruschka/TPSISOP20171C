@@ -21,6 +21,7 @@
 #include <commons/config.h>
 #include <commons/log.h>
 #include <commons/collections/list.h>
+#include <ctype.h>
 
 #include <ipc/serialization.h>
 #include <ipc/ipc.h>
@@ -37,11 +38,6 @@ typedef struct t_process {
 	pthread_t threadID;
 	int processId;
 } t_process;
-
-
-
-
-
 
 int main(int argc, char **argv) {
 
@@ -73,7 +69,7 @@ void showMenu(){
 	char program[50];
 
 	do{
-		printf("1-Start Program\n2-End Program\n3-Disconnect Program\n"
+		printf("\n1-Start Program\n2-End Program\n3-Disconnect Program\n"
 				"4-Clear Console\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
@@ -167,24 +163,20 @@ void *executeProgram(void *arg){
 
 }
 
-int parser_getAnSISOPFromFile(char *name, char **buffer);
+int parser_getAnSISOPFromFile(char *name, void **buffer);
 
 void connectToKernel(char * program){
 
 		int sockfd, n;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
-		char *buffer = 0;
 		int programLength;
 
 		printf("EL programa es: %s", program);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
 		printf("\nConnecting to Kernel\n");
 
-		//Connect to Kernel and Handshake
-
-
-		   /* Create a socket point */
+		/* Create a socket point */
 		sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	   if (sockfd < 0) {
@@ -211,37 +203,19 @@ void connectToKernel(char * program){
 	   log_debug(logger, "Se recibió respuesta de handshake. Success: %d", response->success);
 	   // Now sends the program and is read by server
 
+	   void *buffer = 0;
 	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
-	   /* Send message to the server */
-	   n = write(sockfd, buffer, programLength);
+	   log_debug(logger, "Read file. %s. Size: %d", program, programLength);
+	   dump_buffer(buffer, programLength);
+	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
-	   if (n < 0) {
-	      perror("ERROR sending message to socket");
-	      exit(1);
-	   }
-
-	   /* Now read server response */
-	   bzero(buffer,256);
-	   n = read(sockfd, buffer, 255);
-
-	   if (n < 0) {
-	      perror("ERROR reading from socket");
-	      exit(1);
-	   }
-
-	   printf("%s\n",buffer);
 	   return;
-
-
-
-
-
 }
 
 
 //File Manager
-int parser_getAnSISOPFromFile(char *name, char **buffer){
+int parser_getAnSISOPFromFile(char *name, void **buffer){
 	FILE *file;
 	unsigned long fileLen;
 
@@ -249,7 +223,7 @@ int parser_getAnSISOPFromFile(char *name, char **buffer){
 	file = fopen(name, "rb");
 	if (!file)
 	{
-	fprintf(stderr, "Unable to open file %s", name);
+		log_error(logger, "No se puede abrir el archivo %s", name);
 	}
 
 	//Get file length
@@ -261,7 +235,7 @@ int parser_getAnSISOPFromFile(char *name, char **buffer){
 	*buffer=(char *)malloc(fileLen+1);
 	if (!*buffer)
 	{
-		fprintf(stderr, "Memory error!");
+		log_error(logger, "Error de memoria");
 		fclose(file);
 	}
 
@@ -269,6 +243,30 @@ int parser_getAnSISOPFromFile(char *name, char **buffer){
 	fread(*buffer, fileLen, 1, file);
 	fclose(file);
 
-	//Do what ever with buffer
+	//Do whatever with buffer
 	return fileLen;
+}
+
+// Debug
+void dump_buffer(void *buffer, int size)
+{
+	char ch;
+	int i;
+	for (i = 0; i < size; i++) {
+		ch = *((char *)buffer + i);
+		if (isprint(ch)) {
+			printf("%c", ch);
+		} else {
+			switch(ch)
+			{
+			case '\n':
+				printf("\\n");
+				break;
+
+			default:
+				printf("\\x%02x", ch);
+				break;
+			}
+		}
+	}
 }

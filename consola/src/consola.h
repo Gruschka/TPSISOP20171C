@@ -17,4 +17,6 @@ void clearConsole();
 void *executeProgram(void *arg);
 void connectToKernel(char *);
 
+void dump_buffer(void *buffer, int size);
+
 #endif /* CONSOLA_H_ */

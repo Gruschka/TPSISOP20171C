@@ -93,13 +93,16 @@ ipc_struct_handshake_response *ipc_client_waitHandshakeResponse(int fd) {
 	return response;
 }
 
-void ipc_client_sendStartProgram(int fd, uint32_t codeLength, char *code) {
+void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
 
 	programStart->header.operationIdentifier = PROGRAM_START;
 	programStart->codeLength = codeLength;
-	programStart->code = malloc(sizeof(char) * codeLength);
 
-	memcpy(programStart->code, code, codeLength);
-	send(fd, programStart, sizeof(ipc_header) + sizeof(uint32_t) + codeLength, 0);
+	int headerPlusProgramLengthSize = sizeof(ipc_header) + sizeof(uint32_t);
+	int totalSize = headerPlusProgramLengthSize + sizeof(char) * codeLength;
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, programStart, headerPlusProgramLengthSize);
+	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
+	send(fd, buffer, totalSize, 0);
 }

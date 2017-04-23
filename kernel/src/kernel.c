@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <commons/config.h>
 #include <commons/log.h>
 
@@ -66,7 +67,11 @@ void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifi
 		}
 		case PROGRAM_START: {
 			ipc_struct_program_start *programStart = buffer;
-			log_info(logger, "Program received. Code length: %d. Code: %s", programStart->codeLength, programStart->code);
+			char *codeString = malloc(sizeof(char) * (programStart->codeLength + 1));
+			memcpy(codeString, programStart->code, programStart->codeLength);
+			codeString[programStart->codeLength] = '\0';
+			log_info(logger, "Program received. Code length: %d. Code: %s", programStart->codeLength, codeString);
+			break;
 		}
 		default:
 			break;
