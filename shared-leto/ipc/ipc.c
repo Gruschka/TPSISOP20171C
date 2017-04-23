@@ -16,22 +16,38 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 		switch (header.operationIdentifier) {
 			case HANDSHAKE: {
 				ipc_struct_handshake *handshake = malloc(sizeof(ipc_struct_handshake));
-				count = read(fd, handshake, sizeof(ipc_struct_handshake));
+				count = recv(fd, handshake, sizeof(ipc_struct_handshake), 0);
 				log_debug(logger, "Leí ipc_struct_handshake. size: %d", sizeof(ipc_struct_handshake));
 				deserializedStructHandler(fd, header.operationIdentifier, handshake);
 			}
 			break;
+			case PROGRAM_START: {
+				ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
+				ipc_header *header = malloc(sizeof(ipc_header));
+				recv(fd, header, sizeof(ipc_header), 0);
+				programStart->header = *header;
+
+				uint32_t codeLength;
+				recv(fd, &codeLength, sizeof(uint32_t), 0);
+				programStart->codeLength = codeLength;
+
+				void *codeBuffer = malloc(sizeof(char) * codeLength);
+				recv(fd, codeBuffer, codeLength, 0);
+				programStart->code = codeBuffer;
+
+				deserializedStructHandler(fd, header->operationIdentifier, programStart);
+			}
 		default:
 			break;
 		}
 
-		do {
-			/* Esto es porque no se estaba leyendo toda la data disponible en el fd
-			 * entonces no se dispara el evento de desconexion (EOF) */
-			void *buffer = malloc(sizeof(char));
-			count = read(fd, buffer, sizeof(char));
-			log_debug(logger, "Leí un char más: %c", buffer);
-		} while (count > 0);
+//		do {
+//			/* Esto es porque no se estaba leyendo toda la data disponible en el fd
+//			 * entonces no se dispara el evento de desconexion (EOF) */
+//			void *buffer = malloc(sizeof(char));
+//			count = read(fd, buffer, sizeof(char));
+//			log_debug(logger, "Leí un char más: %c", buffer);
+//		} while (count > 0);
 	}
 
 	return createServer(port, newConnectionHandler, incomingDataHandler, disconnectionHandler);
@@ -60,17 +76,13 @@ void ipc_server_sendHandshakeResponse(int fd, char success) {
 }
 
 ipc_struct_handshake_response *ipc_client_waitHandshakeResponse(int fd) {
+	//TODO: (Hernán) mover la serialización y ser menos villero
 	ipc_header *header = malloc(sizeof(ipc_header));
 	ipc_struct_handshake_response *response = malloc(sizeof(ipc_struct_handshake_response));
 
-	response->header = *header;
-
 	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
 	if (count == sizeof(ipc_header) && header->operationIdentifier == HANDSHAKE_RESPONSE) {
-		log_debug(logger, "client: recibí una respuesta de handshake");
-		void *responseBuffer = malloc(sizeof(ipc_struct_handshake_response));
-		read(fd, responseBuffer, sizeof(ipc_struct_handshake_response));
-		return responseBuffer;
+		read(fd, response, sizeof(ipc_struct_handshake_response));
 	} else {
 		free(header);
 		free(response);
@@ -79,4 +91,15 @@ ipc_struct_handshake_response *ipc_client_waitHandshakeResponse(int fd) {
 
 	free(header);
 	return response;
+}
+
+void ipc_client_sendStartProgram(int fd, uint32_t codeLength, char *code) {
+	ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
+
+	programStart->header.operationIdentifier = PROGRAM_START;
+	programStart->codeLength = codeLength;
+	programStart->code = malloc(sizeof(char) * codeLength);
+
+	memcpy(programStart->code, code, codeLength);
+	send(fd, programStart, sizeof(ipc_header) + sizeof(uint32_t) + codeLength, 0);
 }

@@ -38,6 +38,17 @@ typedef struct handshake_response {
 	char success;
 } __attribute__((packed)) ipc_struct_handshake_response;
 
+typedef struct program_start {
+	ipc_header header;
+	uint32_t codeLength;
+	void *code;
+} __attribute__((packed)) ipc_struct_program_start;
+
+typedef struct program_start_response {
+	ipc_header header;
+	int pid;
+} __attribute__((packed)) ipc_struct_program_start_response;
+
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 
 #endif /* SERIALIZATION_H_ */

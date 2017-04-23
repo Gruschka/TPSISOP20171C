@@ -206,9 +206,9 @@ void connectToKernel(char * program){
 
 	   // Send handshake and wait for response
 	   ipc_client_sendHandshake(CONSOLE, sockfd);
-	   ipc_client_waitHandshakeResponse(sockfd);
-	   ipc_struct_handshake_response a;
+	   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
 
+	   log_debug(logger, "Se recibió respuesta de handshake. Success: %d", response->success);
 	   // Now sends the program and is read by server
 
 	   programLength = parser_getAnSISOPFromFile(program, &buffer);

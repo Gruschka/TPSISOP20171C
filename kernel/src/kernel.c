@@ -64,6 +64,10 @@ void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifi
 			ipc_server_sendHandshakeResponse(fd, 1);
 			break;
 		}
+		case PROGRAM_START: {
+			ipc_struct_program_start *programStart = buffer;
+			log_info(logger, "Program received. Code length: %d. Code: %s", programStart->codeLength, programStart->code);
+		}
 		default:
 			break;
 	}
