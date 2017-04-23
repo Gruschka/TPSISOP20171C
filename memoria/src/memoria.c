@@ -8,6 +8,10 @@
  ============================================================================
  */
 
+// TODO: levantar todo desde archivo de config
+// TODO: dar un máximo de cache para cada proceso
+// TODO: integración con IPC
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +20,13 @@
 
 typedef unsigned char mem_bool;
 static u_int32_t k_numberOfPages;
+
+void millisleep(u_int32_t milliseconds) {
+	struct timespec ts;
+	ts.tv_sec = milliseconds / 1000;
+	ts.tv_nsec = (milliseconds % 1000) * 1000000;
+	nanosleep(&ts, NULL);
+}
 
 //////// Fin de código de memoria física
 
@@ -254,13 +265,6 @@ int mem_initProcess(int32_t processID, int32_t numberOfPages) {
 	}
 
 	return 1;
-}
-
-void millisleep(u_int32_t milliseconds) {
-	struct timespec ts;
-	ts.tv_sec = milliseconds / 1000;
-	ts.tv_nsec = (milliseconds % 1000) * 1000000;
-	nanosleep(&ts, NULL);
 }
 
 void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int32_t size) {
