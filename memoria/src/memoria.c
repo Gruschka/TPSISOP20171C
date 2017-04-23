@@ -11,6 +11,7 @@
 // TODO: levantar todo desde archivo de config
 // TODO: dar un máximo de cache para cada proceso
 // TODO: integración con IPC
+// TODO: consola de la memoria
 
 #include <stdio.h>
 #include <stdlib.h>
