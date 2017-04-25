@@ -1,246 +1,100 @@
 #include "ipc.h"
-#include <stdio.h>
+#include "sockets.h"
 #include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/epoll.h>
-#include <errno.h>
+#include <sys/socket.h>
+#include <commons/log.h>
+#include <string.h>
 
-#define MAXEVENTS 64
+extern t_log *logger;
 
-int make_socket_non_blocking (int sfd)
-{
-  int flags, s;
+int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandler, EpollDisconnectionEventHandler disconnectionHandler, EpollDeserializedStructEventHandler deserializedStructHandler) {
+	void incomingDataHandler(int fd, ipc_header header) {
+		log_debug(logger, "incoming data handler. Operation ID: %d", header.operationIdentifier);
+		int count;
 
-  flags = fcntl (sfd, F_GETFL, 0);
-  if (flags == -1)
-    {
-      return -1;
-    }
+		switch (header.operationIdentifier) {
+			case HANDSHAKE: {
+				ipc_struct_handshake *handshake = malloc(sizeof(ipc_struct_handshake));
+				count = recv(fd, handshake, sizeof(ipc_struct_handshake), 0);
+				deserializedStructHandler(fd, header.operationIdentifier, handshake);
+			}
+			break;
+			case PROGRAM_START: {
+				ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
+				ipc_header *header = malloc(sizeof(ipc_header));
+				recv(fd, header, sizeof(ipc_header), 0);
+				programStart->header = *header;
 
-  flags |= O_NONBLOCK;
-  s = fcntl (sfd, F_SETFL, flags);
-  if (s == -1) { return -1; }
+				uint32_t codeLength;
+				recv(fd, &codeLength, sizeof(uint32_t), 0);
+				programStart->codeLength = codeLength;
 
-  return 0;
+				void *codeBuffer = malloc(sizeof(char) * codeLength);
+				recv(fd, codeBuffer, codeLength, 0);
+				programStart->code = codeBuffer;
+
+				deserializedStructHandler(fd, header->operationIdentifier, programStart);
+				break;
+			}
+		default:
+			break;
+		}
+	}
+
+	return createServer(port, newConnectionHandler, incomingDataHandler, disconnectionHandler);
 }
 
-int create_and_bind (char *port) {
-  struct addrinfo hints;
-  struct addrinfo *result, *rp;
-  int s, sfd;
 
-  memset (&hints, 0, sizeof (struct addrinfo));
-  hints.ai_family = AF_UNSPEC;     /* Return IPv4 and IPv6 choices */
-  hints.ai_socktype = SOCK_STREAM; /* We want a TCP socket */
-  hints.ai_flags = AI_PASSIVE;     /* All interfaces */
+void ipc_client_sendHandshake(ipc_processIdentifier processIdentifier, int fd) {
+	ipc_struct_handshake *handshake = malloc(sizeof(ipc_struct_handshake));
 
-  s = getaddrinfo (NULL, port, &hints, &result);
-  if (s != 0)
-    {
-      fprintf (stderr, "getaddrinfo: %s\n", gai_strerror (s));
-      return -1;
-    }
+	handshake->processIdentifier = processIdentifier;
+	handshake->header.operationIdentifier = HANDSHAKE;
 
-  for (rp = result; rp != NULL; rp = rp->ai_next)
-    {
-      sfd = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-      if (sfd == -1)
-        continue;
-
-      s = bind (sfd, rp->ai_addr, rp->ai_addrlen);
-      if (s == 0)
-        {
-          /* We managed to bind successfully! */
-          break;
-        }
-
-      close (sfd);
-    }
-
-  if (rp == NULL)
-    {
-      fprintf (stderr, "Could not bind\n");
-      return -1;
-    }
-
-  freeaddrinfo (result);
-
-  return sfd;
+	log_debug(logger, "ipc_client_sendHandshake. size: %d", sizeof(ipc_struct_handshake));
+	send(fd, handshake, sizeof(ipc_struct_handshake), 0);
+	free(handshake);
 }
 
-int escucharChetito() {
-  int sfd, s;
-  int efd;
-  struct epoll_event event;
-  struct epoll_event *events;
+void ipc_server_sendHandshakeResponse(int fd, char success) {
+	ipc_struct_handshake_response *response = malloc(sizeof(ipc_struct_handshake_response));
 
-  sfd = create_and_bind ("5000");
-  if (sfd == -1) return -1;
+	response->header.operationIdentifier = HANDSHAKE_RESPONSE;
+	response->success = success;
 
-  s = make_socket_non_blocking (sfd);
-  if (s == -1) return -1;
+	send(fd, response, sizeof(ipc_struct_handshake_response), 0);
+	free(response);
+}
 
-  s = listen (sfd, SOMAXCONN);
-  if (s == -1) { return -1; }
+ipc_struct_handshake_response *ipc_client_waitHandshakeResponse(int fd) {
+	//TODO: (Hernán) mover la serialización y ser menos villero
+	ipc_header *header = malloc(sizeof(ipc_header));
+	ipc_struct_handshake_response *response = malloc(sizeof(ipc_struct_handshake_response));
 
-  efd = epoll_create1 (0);
-  if (efd == -1)
-    {
-      perror ("epoll_create");
-      abort ();
-    }
+	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
+	if (count == sizeof(ipc_header) && header->operationIdentifier == HANDSHAKE_RESPONSE) {
+		read(fd, response, sizeof(ipc_struct_handshake_response));
+	} else {
+		free(header);
+		free(response);
+		return NULL;
+	}
 
-  event.data.fd = sfd;
-  event.events = EPOLLIN | EPOLLET;
-  s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &event);
-  if (s == -1)
-    {
-      perror ("epoll_ctl");
-      abort ();
-    }
+	free(header);
+	return response;
+}
 
-  /* Buffer where events are returned */
-  events = calloc (MAXEVENTS, sizeof event);
+void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
+	ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
 
-  /* The event loop */
-  while (1)
-    {
-      int n, i;
+	programStart->header.operationIdentifier = PROGRAM_START;
+	programStart->codeLength = codeLength;
 
-      n = epoll_wait (efd, events, MAXEVENTS, -1);
-      for (i = 0; i < n; i++)
-	{
-	  if ((events[i].events & EPOLLERR) ||
-              (events[i].events & EPOLLHUP) ||
-              (!(events[i].events & EPOLLIN)))
-	    {
-              /* An error has occured on this fd, or the socket is not
-                 ready for reading (why were we notified then?) */
-	      fprintf (stderr, "epoll error\n");
-	      close (events[i].data.fd);
-	      continue;
-	    }
-
-	  else if (sfd == events[i].data.fd)
-	    {
-              /* We have a notification on the listening socket, which
-                 means one or more incoming connections. */
-              while (1)
-                {
-                  struct sockaddr in_addr;
-                  socklen_t in_len;
-                  int infd;
-                  char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-
-                  in_len = sizeof in_addr;
-                  infd = accept (sfd, &in_addr, &in_len);
-                  if (infd == -1)
-                    {
-                      if ((errno == EAGAIN) ||
-                          (errno == EWOULDBLOCK))
-                        {
-                          /* We have processed all incoming
-                             connections. */
-                          break;
-                        }
-                      else
-                        {
-                          perror ("accept");
-                          break;
-                        }
-                    }
-
-                  s = getnameinfo (&in_addr, in_len,
-                                   hbuf, sizeof hbuf,
-                                   sbuf, sizeof sbuf,
-                                   NI_NUMERICHOST | NI_NUMERICSERV);
-                  if (s == 0)
-                    {
-                      printf("Accepted connection on descriptor %d "
-                             "(host=%s, port=%s)\n", infd, hbuf, sbuf);
-                    }
-
-                  /* Make the incoming socket non-blocking and add it to the
-                     list of fds to monitor. */
-                  s = make_socket_non_blocking (infd);
-                  if (s == -1)
-                    abort ();
-
-                  event.data.fd = infd;
-                  event.events = EPOLLIN | EPOLLET;
-                  s = epoll_ctl (efd, EPOLL_CTL_ADD, infd, &event);
-                  if (s == -1)
-                    {
-                      perror ("epoll_ctl");
-                      abort ();
-                    }
-                }
-              continue;
-            }
-          else
-            {
-              /* We have data on the fd waiting to be read. Read and
-                 display it. We must read whatever data is available
-                 completely, as we are running in edge-triggered mode
-                 and won't get a notification again for the same
-                 data. */
-              int done = 0;
-
-              while (1)
-                {
-                  ssize_t count;
-                  char buf[512];
-
-                  count = read (events[i].data.fd, buf, sizeof buf);
-                  if (count == -1)
-                    {
-                      /* If errno == EAGAIN, that means we have read all
-                         data. So go back to the main loop. */
-                      if (errno != EAGAIN)
-                        {
-                          perror ("read");
-                          done = 1;
-                        }
-                      break;
-                    }
-                  else if (count == 0)
-                    {
-                      /* End of file. The remote has closed the
-                         connection. */
-                      done = 1;
-                      break;
-                    }
-
-                  /* Write the buffer to standard output */
-                  s = write (1, buf, count);
-                  if (s == -1)
-                    {
-                      perror ("write");
-                      abort ();
-                    }
-                }
-
-              if (done)
-                {
-                  printf ("Closed connection on descriptor %d\n",
-                          events[i].data.fd);
-
-                  /* Closing the descriptor will make epoll remove it
-                     from the set of descriptors which are monitored. */
-                  close (events[i].data.fd);
-                }
-            }
-        }
-    }
-
-  free (events);
-
-  close (sfd);
-
-  return EXIT_SUCCESS;
+	int headerPlusProgramLengthSize = sizeof(ipc_header) + sizeof(uint32_t);
+	int totalSize = headerPlusProgramLengthSize + sizeof(char) * codeLength;
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, programStart, headerPlusProgramLengthSize);
+	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
+	send(fd, buffer, totalSize, 0);
 }
