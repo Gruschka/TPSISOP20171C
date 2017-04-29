@@ -35,7 +35,6 @@ void millisleep(u_int32_t milliseconds) {
 typedef struct mem_page_entry {
     int32_t processID;
     int32_t processPageNumber;
-    mem_bool isAvailable;
 } mem_page_entry;
 
 static const u_int32_t k_numberOfFrames = 500;
@@ -66,7 +65,7 @@ int findAvailablePageIndex(int32_t processID, int32_t processPageNumber) {
 	int i;
 	for (i = hash; i < k_numberOfPages; i++) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryPointerForIndex(i);
-		if (possiblyAvailableEntry->isAvailable) {
+		if (possiblyAvailableEntry->processID == -1) {
 			availableEntry = possiblyAvailableEntry;
 			break;
 		}
@@ -78,7 +77,7 @@ int findAvailablePageIndex(int32_t processID, int32_t processPageNumber) {
 
 	for (i = hash - 1; i >= 0; i--) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryPointerForIndex(i);
-			if (possiblyAvailableEntry->isAvailable) {
+			if (possiblyAvailableEntry->processID == -1) {
 				availableEntry = possiblyAvailableEntry;
 				break;
 			}
@@ -145,7 +144,7 @@ int hasMemoryAvailablePages(int32_t numberOfPages) {
 	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
-		if (entry->isAvailable) {
+		if (entry->processID == -1) {
 			availablePages += 1;
 			if (availablePages == numberOfPages) {
 				return 1;
@@ -164,7 +163,6 @@ int assignPageToProcess(int32_t processID, int32_t processPageNumber) {
 	mem_page_entry *entry = getPageEntryPointerForIndex(pageIndex);
 	entry->processID = processID;
 	entry->processPageNumber = processPageNumber;
-	entry->isAvailable = 0;
 	return 1;
 }
 
@@ -358,7 +356,6 @@ void mem_deinitProcess(int32_t processID) {
 		if (entry->processID == processID) {
 			entry->processID = -1;
 			entry->processPageNumber = -1;
-			entry->isAvailable = 1;
 		}
 	}
 
@@ -438,7 +435,6 @@ int main(void) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
 		entry->processID = -1;
 		entry->processPageNumber = -1;
-		entry->isAvailable = 1;
 	}
 
 	// Cache memory initialization
