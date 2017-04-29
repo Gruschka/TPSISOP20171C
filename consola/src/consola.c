@@ -111,7 +111,6 @@ void startProgram(char * programPath) {
 
 	pthread_create(&threadId, &attr, executeProgram, programPath);
 
-	printf("El thread ID dentro de SP es: %u",threadId);
 	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
 
