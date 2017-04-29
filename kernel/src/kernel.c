@@ -12,9 +12,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+
 #include <commons/config.h>
 #include <commons/log.h>
-#include <ipc/ipc.h>
 
 //"""Private"""
 static t_config *__config;
@@ -25,7 +27,13 @@ t_log *logger;
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
+
+#ifdef DEBUG
 	logger = log_create(logFile, "KERNEL", 1, LOG_LEVEL_DEBUG);
+#else
+	logger = log_create(logFile, "KERNEL", 1, LOG_LEVEL_INFO);
+#endif
+
 	log_info(logger, "Comenzó la ejecución");
 	log_info(logger, "Log file: %s", logFile);
 
@@ -36,10 +44,23 @@ int main(int argc, char **argv) {
 		__config = config_create(argv[1]);
 		configuration = malloc(sizeof(t_kernel_config));
 	}
+
 	fetchConfiguration();
 
-	escucharChetito();
+	pthread_t threadId;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
 
+	pthread_create(&threadId, &attr, consolesServer_main, NULL);
+
+	pthread_join(threadId, NULL);
+
+	return EXIT_SUCCESS;
+}
+
+void *consolesServer_main(void *args) {
+	//TODO: Pasarle el puerto por archivo de config
+	ipc_createServer("5000", consolesServerSocket_handleNewConnection, consolesServerSocket_handleDisconnection, consolesServerSocket_handleDeserializedStruct);
 	return EXIT_SUCCESS;
 }
 
@@ -57,8 +78,31 @@ void fetchConfiguration() {
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
 }
 
-void pruebitaCheta() {
-	t_PCB *pcb = malloc(sizeof(pcb));
+void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer) {
+	switch (operationId) {
+		case HANDSHAKE: {
+			ipc_struct_handshake *handshake = buffer;
+			log_info(logger, "Handshake received. Process identifier: %s", processName(handshake->processIdentifier));
+			ipc_server_sendHandshakeResponse(fd, 1);
+			break;
+		}
+		case PROGRAM_START: {
+			ipc_struct_program_start *programStart = buffer;
+			char *codeString = malloc(sizeof(char) * (programStart->codeLength + 1));
+			memcpy(codeString, programStart->code, programStart->codeLength);
+			codeString[programStart->codeLength] = '\0';
+			log_info(logger, "Program received. Code length: %d. Code: %s", programStart->codeLength, codeString);
+			break;
+		}
+		default:
+			break;
+	}
+}
 
+void consolesServerSocket_handleNewConnection(int fd) {
+	log_info(logger, "New connection. fd: %d", fd);
+}
 
+void consolesServerSocket_handleDisconnection(int fd) {
+	log_info(logger, "New disconnection. fd: %d", fd);
 }
