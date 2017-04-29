@@ -18,6 +18,7 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+#include <time.h>
 
 typedef unsigned char mem_bool;
 static u_int32_t k_numberOfPages;
@@ -377,6 +378,7 @@ void mem_deinitProcess(int32_t processID) {
 
 int main(void) {
 	// Physical memory initialization
+	printf("Inicializando memoria física.\n");
 	int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
 	physicalMemory = malloc(totalNumberOfBytes);
 	k_numberOfPages = floor(totalNumberOfBytes / (k_frameSize + sizeof(mem_page_entry)));
@@ -390,6 +392,7 @@ int main(void) {
 	}
 
 	// Cache memory initialization
+	printf("Inicializando memoria cache.\n");
 	cache = malloc(k_maxPagesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
 	for (i = 0; i < k_maxPagesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
@@ -399,31 +402,47 @@ int main(void) {
 		entry->pageContentPointer = (void *)entry + sizeof(mem_cached_page_entry);
 	}
 
-	int a = mem_initProcess(0, 10);
-	int b = mem_initProcess(1, 10);
-	int c = mem_initProcess(2, 10);
-	int d = mem_initProcess(0, 1);
+//	int a = mem_initProcess(0, 10);
+//	int b = mem_initProcess(1, 10);
+//	int c = mem_initProcess(2, 10);
+//	int d = mem_initProcess(0, 1);
+//
+//	char *texto = "esto es una prueba capo";
+//	int a1 = mem_write(0, 0, 0, 24, texto);
+//	int a2 = mem_write(0, 9, 0, 24, texto);
+//	int a3 = mem_write(1, 2, 0, 24, texto);
+//	int a4 = mem_write(0, 10, 0, 24, texto);
+//
+//	char *meTraje1 = mem_read(0, 0, 0, 24);
+//	char *meTraje2 = mem_read(0, 9, 0, 24);
+//	char *meTraje3 = mem_read(1, 2, 0, 24);
+//	char *meTraje4 = mem_read(0, 10, 0, 24);
+//
+//	int b1 = mem_addPagesToProcess(0, 1);
+//	int b2 = mem_write(0, 10, 0, 24, texto);
+//	char *b3 = mem_read(0, 10, 0, 24);
+//	char *b4 = mem_read(0, 11, 0, 24);
+//
+//	mem_deinitProcess(0);
+//
+//	char *c1 = mem_read(0, 0, 0, 24);
+//	char *c2 = mem_read(1, 2, 0, 24);
 
-	char *texto = "esto es una prueba capo";
-	int a1 = mem_write(0, 0, 0, 24, texto);
-	int a2 = mem_write(0, 9, 0, 24, texto);
-	int a3 = mem_write(1, 2, 0, 24, texto);
-	int a4 = mem_write(0, 10, 0, 24, texto);
+	printf("Todo configurado y funcionando.\n\n");
 
-	char *meTraje1 = mem_read(0, 0, 0, 24);
-	char *meTraje2 = mem_read(0, 9, 0, 24);
-	char *meTraje3 = mem_read(1, 2, 0, 24);
-	char *meTraje4 = mem_read(0, 10, 0, 24);
-
-	int b1 = mem_addPagesToProcess(0, 1);
-	int b2 = mem_write(0, 10, 0, 24, texto);
-	char *b3 = mem_read(0, 10, 0, 24);
-	char *b4 = mem_read(0, 11, 0, 24);
-
-	mem_deinitProcess(0);
-
-	char *c1 = mem_read(0, 0, 0, 24);
-	char *c2 = mem_read(1, 2, 0, 24);
+	int optionIndex = 0;
+	do {
+		printf("Seleccione una opción (0 para salir): \n1. Configurar retardo\n2. dump\n3. flush\n4. size\n> ");
+		scanf("%d", &optionIndex);
+		switch (optionIndex) {
+		case 0: printf("Saliendo.\n\n"); break;
+		case 1: printf("Opción 1.\n\n"); break;
+		case 2: printf("Opción 2.\n\n"); break;
+		case 3: printf("Opción 3.\n\n"); break;
+		case 4: printf("Opción 4.\n\n"); break;
+		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
+		}
+	} while (optionIndex != 0);
 
 	return EXIT_SUCCESS;
 }
