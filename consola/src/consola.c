@@ -156,11 +156,6 @@ void *executeProgram(void *arg){
 
 
 	printf("Execute ");
-	pthread_t self;
-
-	self = pthread_self();
-
-	printf("Thread ID dentro del EP: %u", self);
 
 	char * program = (char *)arg;
 
