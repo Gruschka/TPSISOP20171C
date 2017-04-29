@@ -18,6 +18,7 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+#include <time.h>
 
 typedef unsigned char mem_bool;
 static u_int32_t k_numberOfPages;
@@ -34,13 +35,12 @@ void millisleep(u_int32_t milliseconds) {
 typedef struct mem_page_entry {
     int32_t processID;
     int32_t processPageNumber;
-    mem_bool isAvailable;
 } mem_page_entry;
 
 static const u_int32_t k_numberOfFrames = 500;
 static const u_int32_t k_frameSize = 256;
 static void *physicalMemory;
-static const u_int32_t k_physicalMemoryAccessDelay = 100;
+static u_int32_t k_physicalMemoryAccessDelay = 100;
 
 int64_t calculatePair(int32_t k1, int32_t k2) {
 	return ((int64_t)k1 << 32) + (int64_t)k2;
@@ -65,7 +65,7 @@ int findAvailablePageIndex(int32_t processID, int32_t processPageNumber) {
 	int i;
 	for (i = hash; i < k_numberOfPages; i++) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryPointerForIndex(i);
-		if (possiblyAvailableEntry->isAvailable) {
+		if (possiblyAvailableEntry->processID == -1) {
 			availableEntry = possiblyAvailableEntry;
 			break;
 		}
@@ -77,7 +77,7 @@ int findAvailablePageIndex(int32_t processID, int32_t processPageNumber) {
 
 	for (i = hash - 1; i >= 0; i--) {
 		mem_page_entry *possiblyAvailableEntry = getPageEntryPointerForIndex(i);
-			if (possiblyAvailableEntry->isAvailable) {
+			if (possiblyAvailableEntry->processID == -1) {
 				availableEntry = possiblyAvailableEntry;
 				break;
 			}
@@ -144,7 +144,7 @@ int hasMemoryAvailablePages(int32_t numberOfPages) {
 	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
-		if (entry->isAvailable) {
+		if (entry->processID == -1) {
 			availablePages += 1;
 			if (availablePages == numberOfPages) {
 				return 1;
@@ -163,7 +163,6 @@ int assignPageToProcess(int32_t processID, int32_t processPageNumber) {
 	mem_page_entry *entry = getPageEntryPointerForIndex(pageIndex);
 	entry->processID = processID;
 	entry->processPageNumber = processPageNumber;
-	entry->isAvailable = 0;
 	return 1;
 }
 
@@ -357,7 +356,6 @@ void mem_deinitProcess(int32_t processID) {
 		if (entry->processID == processID) {
 			entry->processID = -1;
 			entry->processPageNumber = -1;
-			entry->isAvailable = 1;
 		}
 	}
 
@@ -375,8 +373,59 @@ void mem_deinitProcess(int32_t processID) {
 
 //////// Fin de interfaz pública
 
+//////// Comienzo de consola
+
+void menu_configurePhysicalMemoryDelay() {
+	int newDelay = 0;
+	printf("Introduzca el nuevo retardo en milisegundos (0 para cancelar): \n> ");
+	scanf("%d", &newDelay);
+	if (newDelay == 0) {
+		printf("No se ha modificado el retardo de la memoria.\n\n");
+		return;
+	}
+
+	k_physicalMemoryAccessDelay = newDelay;
+	printf("El nuevo retardo de la memoria es %dms\n\n", newDelay);
+}
+
+void menu_dump() {
+	int optionIndex = 0;
+	do {
+		printf("¿Qué desea dumpear? (0 para cancelar): \n1. Memoria cache\n2. Tabla de páginas y listado de procesos activos\n3. Contenido de la memoria\n> ");
+		scanf("%d", &optionIndex);
+		switch (optionIndex) {
+		case 0: printf("No se dumpeó nada.\n\n"); break;
+		case 1: printf("TODO: dumpear cache.\n\n"); break;
+		case 2: printf("TODO: dumpear estructuras administrativas.\n\n"); break;
+		case 3: printf("TODO: dumpear contenido de la memoria.\n\n"); break;
+		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
+		}
+	} while (optionIndex > 3);
+}
+
+void menu_flush() {
+	printf("TODO: flushear cache.\n\n");
+}
+
+void menu_size() {
+	int optionIndex = 0;
+		do {
+			printf("¿El tamaño de qué desea obtener? (0 para cancelar): \n1. Memoria física completa\n2. Un proceso en particular\n> ");
+			scanf("%d", &optionIndex);
+			switch (optionIndex) {
+			case 0: printf("Se canceló la consulta de tamaño.\n\n"); break;
+			case 1: printf("TODO: imprimir tamaño de la memoria (frames libres y frames ocupados).\n\n"); break;
+			case 2: printf("TODO: pedir processID y dar el tamaño que ocupa.\n\n"); break;
+			default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
+			}
+		} while (optionIndex > 2);
+}
+
+//////// Fin de consola
+
 int main(void) {
 	// Physical memory initialization
+	printf("Inicializando memoria física.\n");
 	int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
 	physicalMemory = malloc(totalNumberOfBytes);
 	k_numberOfPages = floor(totalNumberOfBytes / (k_frameSize + sizeof(mem_page_entry)));
@@ -386,10 +435,10 @@ int main(void) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
 		entry->processID = -1;
 		entry->processPageNumber = -1;
-		entry->isAvailable = 1;
 	}
 
 	// Cache memory initialization
+	printf("Inicializando memoria cache.\n");
 	cache = malloc(k_maxPagesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
 	for (i = 0; i < k_maxPagesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
@@ -399,31 +448,47 @@ int main(void) {
 		entry->pageContentPointer = (void *)entry + sizeof(mem_cached_page_entry);
 	}
 
-	int a = mem_initProcess(0, 10);
-	int b = mem_initProcess(1, 10);
-	int c = mem_initProcess(2, 10);
-	int d = mem_initProcess(0, 1);
+//	int a = mem_initProcess(0, 10);
+//	int b = mem_initProcess(1, 10);
+//	int c = mem_initProcess(2, 10);
+//	int d = mem_initProcess(0, 1);
+//
+//	char *texto = "esto es una prueba capo";
+//	int a1 = mem_write(0, 0, 0, 24, texto);
+//	int a2 = mem_write(0, 9, 0, 24, texto);
+//	int a3 = mem_write(1, 2, 0, 24, texto);
+//	int a4 = mem_write(0, 10, 0, 24, texto);
+//
+//	char *meTraje1 = mem_read(0, 0, 0, 24);
+//	char *meTraje2 = mem_read(0, 9, 0, 24);
+//	char *meTraje3 = mem_read(1, 2, 0, 24);
+//	char *meTraje4 = mem_read(0, 10, 0, 24);
+//
+//	int b1 = mem_addPagesToProcess(0, 1);
+//	int b2 = mem_write(0, 10, 0, 24, texto);
+//	char *b3 = mem_read(0, 10, 0, 24);
+//	char *b4 = mem_read(0, 11, 0, 24);
+//
+//	mem_deinitProcess(0);
+//
+//	char *c1 = mem_read(0, 0, 0, 24);
+//	char *c2 = mem_read(1, 2, 0, 24);
 
-	char *texto = "esto es una prueba capo";
-	int a1 = mem_write(0, 0, 0, 24, texto);
-	int a2 = mem_write(0, 9, 0, 24, texto);
-	int a3 = mem_write(1, 2, 0, 24, texto);
-	int a4 = mem_write(0, 10, 0, 24, texto);
+	printf("Todo configurado y funcionando.\n\n");
 
-	char *meTraje1 = mem_read(0, 0, 0, 24);
-	char *meTraje2 = mem_read(0, 9, 0, 24);
-	char *meTraje3 = mem_read(1, 2, 0, 24);
-	char *meTraje4 = mem_read(0, 10, 0, 24);
-
-	int b1 = mem_addPagesToProcess(0, 1);
-	int b2 = mem_write(0, 10, 0, 24, texto);
-	char *b3 = mem_read(0, 10, 0, 24);
-	char *b4 = mem_read(0, 11, 0, 24);
-
-	mem_deinitProcess(0);
-
-	char *c1 = mem_read(0, 0, 0, 24);
-	char *c2 = mem_read(1, 2, 0, 24);
+	int optionIndex = 0;
+	do {
+		printf("Seleccione una opción (0 para salir): \n1. Configurar retardo\n2. dump\n3. flush\n4. size\n> ");
+		scanf("%d", &optionIndex);
+		switch (optionIndex) {
+		case 0: printf("Saliendo.\n\n"); break;
+		case 1: menu_configurePhysicalMemoryDelay(); break;
+		case 2: menu_dump(); break;
+		case 3: menu_flush(); break;
+		case 4: menu_size(); break;
+		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
+		}
+	} while (optionIndex != 0);
 
 	return EXIT_SUCCESS;
 }
