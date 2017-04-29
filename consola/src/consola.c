@@ -22,7 +22,6 @@
 #include <commons/log.h>
 #include <commons/collections/list.h>
 #include <ctype.h>
-
 #include <ipc/serialization.h>
 #include <ipc/ipc.h>
 
@@ -39,10 +38,12 @@ typedef struct t_process {
 	int processId;
 } t_process;
 
+
 int main(int argc, char **argv) {
 
 	char *logFile = tmpnam(NULL);
 	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
+
 	if (argc < 2) {
 			log_error(logger, "Falta pasar la ruta del archivo de configuracion");
 			return EXIT_FAILURE;
@@ -51,6 +52,7 @@ int main(int argc, char **argv) {
 			serverIp = config_get_string_value(consoleConfig, "IP_KERNEL");
 			portno = config_get_int_value(consoleConfig, "PUERTO_KERNEL");
 	}
+
 	processList = list_create();
 
 	showMenu();
@@ -93,10 +95,7 @@ void showMenu(){
 		default:
 			printf("Invalid input\n");
 			break;
-
-
 		}
-
 	}while (menuopt != 3);
 }
 void startProgram(char * programPath) {
@@ -112,6 +111,7 @@ void startProgram(char * programPath) {
 
 	pthread_create(&threadId, &attr, executeProgram, programPath);
 
+	printf("El thread ID dentro de SP es: %u",threadId);
 	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
 
@@ -154,6 +154,14 @@ void requestFilePath(char *filePath){
 
 void *executeProgram(void *arg){
 
+
+	printf("Execute ");
+	pthread_t self;
+
+	self = pthread_self();
+
+	printf("Thread ID dentro del EP: %u", self);
+
 	char * program = (char *)arg;
 
 	connectToKernel(program);
@@ -167,10 +175,14 @@ int parser_getAnSISOPFromFile(char *name, void **buffer);
 
 void connectToKernel(char * program){
 
+		int pid; //TO DO: Este valor debe tomarlo por parte del KERNEL
 		int sockfd, n;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
 		int programLength;
+		t_process aux; // Para la lista de PIDs y Thread Ids
+		pthread_t self = pthread_self();
+		aux.threadID = self;
 
 		printf("EL programa es: %s", program);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
@@ -210,8 +222,18 @@ void connectToKernel(char * program){
 	   dump_buffer(buffer, programLength);
 	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
+	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
+
+	   pid = 1; //Le damos un valor cualquiera
+
+	   aux.processId = pid; //Termina de completar estructura
+
+	   list_add(processList , &aux);
+
+
 	   return;
 }
+
 
 
 //File Manager
