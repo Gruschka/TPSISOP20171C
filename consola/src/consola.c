@@ -210,20 +210,20 @@ void connectToKernel(char * program){
 	   // Now sends the program and is read by server
 
 	   void *buffer = 0;
-	   programLength = parser_getAnSISOPFromFile(program, &buffer);
+	   //Comennto parte de archivo para poder trabajar sin archivos y probar la lista de t_process
+	   //programLength = parser_getAnSISOPFromFile(program, &buffer);
 
-	   log_debug(logger, "Read file. %s. Size: %d", program, programLength);
-	   dump_buffer(buffer, programLength);
-	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
+	   //log_debug(logger, "Read file. %s. Size: %d", program, programLength);
+	   //dump_buffer(buffer, programLength);
+	  // ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
 	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
 
 	   pid = 1; //Le damos un valor cualquiera
 
 	   aux.processId = pid; //Termina de completar estructura
-
 	   list_add(processList , &aux);
-
+	   printf("Programa inicializado.\nThread Id: %u\nPID:%d\n",aux.threadID,aux.processId);
 
 	   return;
 }
@@ -285,4 +285,11 @@ void dump_buffer(void *buffer, int size)
 			}
 		}
 	}
+}
+
+void console_print_programs(t_list * list){
+
+	//TODO:Function to print t_list list of t_process elements
+
+
 }

@@ -19,4 +19,5 @@ void connectToKernel(char *);
 
 void dump_buffer(void *buffer, int size);
 
+//void console_print_programs(t_list * head);
 #endif /* CONSOLA_H_ */
