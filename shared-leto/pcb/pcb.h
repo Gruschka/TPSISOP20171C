@@ -38,6 +38,7 @@ typedef struct t_PCB {
 	void *filesTable; // Puntero a la tabla de archivos del proceso
 } t_PCB;
 
+t_PCB pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPointer,int32_t ExitCode);
 
 
 #endif /* PCB_H_ */
