@@ -19,19 +19,21 @@
 #include <string.h>
 #include <unistd.h>
 #include "cpu.h"
+#include <commons/log.h>
 
+t_log *logger;
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = 0;
-	CPU->connections[KERNEL].host = "127.0.0.1";
-	CPU->connections[KERNEL].portNumber = 5000;
-	CPU->connections[KERNEL].server = 0;
-	CPU->connections[KERNEL].socketFileDescriptor = 0;
-	CPU->connections[KERNEL].status = DISCONNECTED;
-	CPU->connections[MEMORY].host = "127.0.0.1";
-	CPU->connections[MEMORY].portNumber = 5001;
-	CPU->connections[MEMORY].server = 0;
-	CPU->connections[MEMORY].socketFileDescriptor = 0;
-	CPU->connections[MEMORY].status = DISCONNECTED;
+	CPU->connections[_KERNEL].host = "172.20.10.5";
+	CPU->connections[_KERNEL].portNumber = 5000;
+	CPU->connections[_KERNEL].server = 0;
+	CPU->connections[_KERNEL].socketFileDescriptor = 0;
+	CPU->connections[_KERNEL].status = DISCONNECTED;
+	CPU->connections[_MEMORY].host = "127.0.0.1";
+	CPU->connections[_MEMORY].portNumber = 5001;
+	CPU->connections[_MEMORY].server = 0;
+	CPU->connections[_MEMORY].socketFileDescriptor = 0;
+	CPU->connections[_MEMORY].status = DISCONNECTED;
 	CPU->assignedPCB = 0;
 	CPU->currentInstruction = 0;
 	CPU->instructionPointer = 0;
@@ -97,4 +99,42 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 	   return 0;
 }
 //test
+
+int main() {
+	char *serverIp = "172.20.10.5";
+	int portno = 5000;
+	int sockfd, n;
+			struct sockaddr_in serv_addr;
+			struct hostent *server;
+			int programLength;
+
+			printf("\nServer Ip: %s Port No: %d", serverIp, portno);
+			printf("\nConnecting to Kernel\n");
+
+			/* Create a socket point */
+			sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+		   if (sockfd < 0) {
+		      perror("ERROR opening socket");
+		      exit(1);
+		   }
+
+		   server = gethostbyname(serverIp);
+		   bzero((char *) &serv_addr, sizeof(serv_addr));
+		   serv_addr.sin_family = AF_INET;
+		   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+		   serv_addr.sin_port = htons(portno);
+
+		   /* Now connect to the server */
+		   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+		      perror("ERROR connecting");
+		      exit(1);
+		   }
+
+		   // Send handshake and wait for response
+		   ipc_client_sendHandshake(CPU, sockfd);
+		   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
+
+	return EXIT_SUCCESS;
+}
 
