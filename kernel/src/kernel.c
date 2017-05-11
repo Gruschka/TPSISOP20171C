@@ -18,12 +18,15 @@
 #include <commons/config.h>
 #include <commons/log.h>
 
+#include "memory.h"
+
 //"""Private"""
 static t_config *__config;
 
 //Globals
 t_kernel_config *configuration;
 t_log *logger;
+uint32_t page_size;
 
 void testMemory();
 
@@ -54,6 +57,7 @@ int main(int argc, char **argv) {
 	pthread_attr_init(&attr);
 	pthread_create(&threadId, &attr, consolesServer_main, NULL);
 
+	page_size = 512;
 	testMemory();
 
 	pthread_join(threadId, NULL);
@@ -61,7 +65,10 @@ int main(int argc, char **argv) {
 }
 
 void testMemory() {
+	void *page = memory_createPage(page_size);
+	void *block = memory_addBlock(page, 50);
 
+	memory_dumpPage(page);
 }
 
 void *consolesServer_main(void *args) {
