@@ -23,8 +23,8 @@
 //#define MEMORY 1
 
 typedef enum{
-	KERNEL,
-	MEMORY,
+	T_KERNEL,
+	T_MEMORY,
 }t_connectionType;
 
 typedef enum{

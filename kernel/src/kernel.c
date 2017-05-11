@@ -25,6 +25,8 @@ static t_config *__config;
 t_kernel_config *configuration;
 t_log *logger;
 
+void testMemory();
+
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
 
@@ -50,12 +52,16 @@ int main(int argc, char **argv) {
 	pthread_t threadId;
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
-
 	pthread_create(&threadId, &attr, consolesServer_main, NULL);
 
-	pthread_join(threadId, NULL);
+	testMemory();
 
+	pthread_join(threadId, NULL);
 	return EXIT_SUCCESS;
+}
+
+void testMemory() {
+
 }
 
 void *consolesServer_main(void *args) {
