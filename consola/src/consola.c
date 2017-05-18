@@ -38,8 +38,10 @@ typedef struct t_process {
 	int processId;
 } t_process;
 
+pthread_t threadId;
 
 int main(int argc, char **argv) {
+
 
 	char *logFile = tmpnam(NULL);
 	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
@@ -57,6 +59,7 @@ int main(int argc, char **argv) {
 
 	showMenu();
 
+	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
 	return 0;
 
@@ -66,6 +69,7 @@ int main(int argc, char **argv) {
 void showMenu(){
 
 	int menuopt;
+	int unPid;
 	printf("\nConsole Menu:\n");
 
 	char program[50];
@@ -81,7 +85,8 @@ void showMenu(){
 			break;
 
 		case 2:						 //End Program
-			endProgram();
+			unPid = requestPid();
+			endProgram(unPid);
 			break;
 
 		case 3:						 //Disconnect Program
@@ -103,25 +108,34 @@ void startProgram(char * programPath) {
 	printf("\nInitiating:%s\n", programPath);
 
 	//Thread ID
-	pthread_t threadId;
 
 	//Create thread attributes
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
-	pthread_create(&threadId, &attr, executeProgram, programPath);
 
-	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
+	pthread_create(&threadId, &attr, executeProgram, programPath);
+	printf("El tid dentro de SP es: %u", threadId);
+
 
 
 
 
 }
 
+int requestPid(){
+	int pid;
+	printf("\nEnter pid:\n");
+	scanf("%d", &pid);
+	return pid;
+
+}
+
+void endProgram(int pid){
+	printf("\nFinishing program with PID: %d\n",pid);
 
 
-void endProgram(){
-	printf("\nEnd Program\n");
+
 
 }
 

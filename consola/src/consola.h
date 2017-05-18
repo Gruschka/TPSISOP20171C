@@ -11,12 +11,12 @@
 
 void showMenu();
 void startProgram(char *program);
-void endProgram();
+void endProgram(int  pid);
 void disconnectProgram();
 void clearConsole();
 void *executeProgram(void *arg);
 void connectToKernel(char *);
-
+int requestPid();
 void dump_buffer(void *buffer, int size);
 
 //void console_print_programs(t_list * head);
