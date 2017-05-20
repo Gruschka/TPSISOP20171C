@@ -38,7 +38,6 @@ typedef struct t_process {
 	int processId;
 } t_process;
 
-pthread_t threadId;
 
 int main(int argc, char **argv) {
 
@@ -116,8 +115,11 @@ void startProgram(char * programPath) {
 	printf("\nInitiating:%s\n", programPath);
 
 	//Thread ID
+	pthread_t threadId;
+
 
 	//Create thread attributes
+
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
