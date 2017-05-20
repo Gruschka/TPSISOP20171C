@@ -61,8 +61,9 @@ int main(int argc, char **argv) {
 
 	printf("Stopping console execution\n");
 
-	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
-
+	//pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
+	joinThreadList(processList);
+	printf("Closing console\n");
 	return 0;
 
 }
@@ -251,7 +252,7 @@ void connectToKernel(char * program){
 	   while(1){
 
 		   printf("Hi! I'm thread: %u\n", self);
-		   sleep(5);
+		   sleep(10);
 		   iterations++; //Grasada para que imprima 3 veces y termine
 
 		   if(iterations == 3){
@@ -333,19 +334,26 @@ void joinThreadList(t_list * threadListHead){
 	t_process * aux = NULL;
 	int i = 0;
 
+	if(threadListSize == 0){
+		printf("There are no threads to join\n");
+		return;
+	}
+
 	for(i = 0; i < threadListSize; i++){
 
 		aux = list_get(threadListHead, i);
 
-		printf("Waiting for thread: %u from process %d", aux->threadID, aux->processId);
+		printf("Waiting for Thread[%d]: %u from process %d\n",i, aux->threadID, aux->processId);
 
 		pthread_join(aux->threadID, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
+		printf("Thread:[%d] - %u successfully joined\n",i, aux->threadID);
 
 
 	}
 
 
+	printf("All the threads have joined!\n");
 
 
 }
