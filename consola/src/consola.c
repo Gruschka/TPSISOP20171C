@@ -239,6 +239,12 @@ void connectToKernel(char * program){
 	   list_add(processList , &aux);
 	   printf("Programa inicializado.\nThread Id: %u\nPID:%d\n",aux.threadID,aux.processId);
 
+	   while(1){
+
+		   printf("Hi! I'm thread: %u\n", self);
+		   sleep(5);
+	   }
+
 	   return;
 }
 
