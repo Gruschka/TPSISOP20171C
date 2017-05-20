@@ -59,6 +59,8 @@ int main(int argc, char **argv) {
 
 	showMenu();
 
+	printf("Stopping console execution\n");
+
 	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
 	return 0;
@@ -76,7 +78,7 @@ void showMenu(){
 
 	do{
 		printf("\n1-Start Program\n2-End Program\n3-Disconnect Program\n"
-				"4-Clear Console\n");
+				"4-Clear Console\n5-Exit console\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
 		case 1:						 //Start Program
@@ -96,6 +98,11 @@ void showMenu(){
 		case 4:						 //Clear Console
 			clearConsole();
 			break;
+
+		case 5:						 //Clear Console
+			return;
+			break;
+
 
 		default:
 			printf("Invalid input\n");
@@ -239,10 +246,21 @@ void connectToKernel(char * program){
 	   list_add(processList , &aux);
 	   printf("Programa inicializado.\nThread Id: %u\nPID:%d\n",aux.threadID,aux.processId);
 
+	   int iterations = 0;
+
 	   while(1){
 
 		   printf("Hi! I'm thread: %u\n", self);
 		   sleep(5);
+		   iterations++; //Grasada para que imprima 3 veces y termine
+
+		   if(iterations == 3){
+			   printf("Finishing thread %u\n", self);
+			   break;
+		   }
+
+
+
 	   }
 
 	   return;
@@ -306,6 +324,32 @@ void dump_buffer(void *buffer, int size)
 		}
 	}
 }
+
+
+void joinThreadList(t_list * threadListHead){
+
+
+	int threadListSize = list_size(threadListHead);
+	t_process * aux = NULL;
+	int i = 0;
+
+	for(i = 0; i < threadListSize; i++){
+
+		aux = list_get(threadListHead, i);
+
+		printf("Waiting for thread: %u from process %d", aux->threadID, aux->processId);
+
+		pthread_join(aux->threadID, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
+
+
+
+	}
+
+
+
+
+}
+
 
 void console_print_programs(t_list * list){
 

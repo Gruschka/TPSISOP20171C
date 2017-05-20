@@ -10,6 +10,7 @@
 
 
 void showMenu();
+//void joinThreadList(t_list * threadList);
 void startProgram(char *program);
 void endProgram(int  pid);
 void disconnectProgram();
