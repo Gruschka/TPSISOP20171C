@@ -113,7 +113,7 @@ void showMenu(){
 			printf("Invalid input\n");
 			break;
 		}
-	}while (menuopt != 3);
+	}while (menuopt != 6);
 }
 void startProgram(char * programPath) {
 
@@ -146,14 +146,78 @@ int requestPid(){
 
 }
 
-void endProgram(int pid){
-	printf("\nFinishing program with PID: %d\n",pid);
+
+pthread_t getTidfromPid(int aPid){
+	//TO DO: Ver si se puede hacer con un list_find para hacerlo menos grasuli
+
+
+	t_process * aux = NULL;
+	t_list * threadListHead = processList;
+
+	int threadListSize = list_size(threadListHead);
+	int i = 0;
 
 
 
+
+		for(i = 0; i < threadListSize; i++){
+
+			aux = list_get(threadListHead, i);
+
+			if(aux->processId == aPid){
+				return aux->threadID;
+			}
+
+		}
 
 }
 
+int getIndexFromTid(pthread_t tid){
+
+	t_process * aux = NULL;
+	t_list * threadListHead = processList;
+
+	int threadListSize = list_size(threadListHead);
+	int i = 0;
+
+
+		for(i = 0; i < threadListSize; i++){
+
+			aux = list_get(threadListHead, i);
+
+			if(aux->threadID == tid){
+				return i;
+			}
+
+		}
+
+
+}
+void endProgram(int pid){
+	printf("\nFinishing program with PID: %d\n",pid);
+	pthread_t tidToKill = getTidfromPid(pid);
+	int indexOfRemovedThread= getIndexFromTid(tidToKill);
+
+	int result = pthread_cancel(tidToKill);
+
+	if(result == 0){
+	    	printf("Program finished successfully\n");
+	    }else{
+	    	printf("Error - program not finished successfully\n");
+	    }
+
+
+	/*int result = pthread_kill(tidToKill, 2);
+
+    if(result == 0){
+    	printf("Program finished successfully");
+    }*/
+
+	list_remove(processList, indexOfRemovedThread);
+
+	//TO DO: Mandar mensaje al kernel con termination status?
+
+}
 
 
 void disconnectConsole(){
@@ -163,7 +227,6 @@ void disconnectConsole(){
 
 
 void clearConsole(){
-	printf("\Cleanning console\n");
 	system("clear");
 	return;
 }
@@ -177,7 +240,6 @@ void requestFilePath(char *filePath){
 	//puts(filePath);
 
 }
-
 
 
 void *executeProgram(void *arg){
