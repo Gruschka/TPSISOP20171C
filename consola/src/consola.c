@@ -8,6 +8,12 @@
  ============================================================================
  */
 
+//Ordenados por prioridad descendente.
+//TO DO: Recibir PID del Kernel y no usar el hardcodeado
+//TO DO: Implementar funcionamiento de los programas con archivos (actualmente no hacen nada) y recibir respuestas del kernel (receive)
+//TO DO: Devolver termination status al kernel (Segun si se finishea el proceso o se mata la consola)
+//TO DO: Desconectar consola
+//TO DO: Ver si podemos repetir menos logica con las funciones que devuelven TID e Indice de una lista.
 #include "consola.h"
 #include <stdio.h>
 #include <stdlib.h>
