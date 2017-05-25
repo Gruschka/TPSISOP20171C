@@ -32,6 +32,7 @@ int portno;
 char *serverIp = 0;
 t_list * processList;
 
+int globalPid = 0; //Pid global que se incrementa con cada hilo que se crea para poder testear finalizar hilos por pid
 
 typedef struct t_process {
 	pthread_t threadID;
@@ -78,7 +79,7 @@ void showMenu(){
 
 	do{
 		printf("\n1-Start Program\n2-End Program\n3-Disconnect Program\n"
-				"4-Clear Console\n5-Exit console\n");
+				"4-Clear Console\n5-Show current threads\n6-Exit console\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
 		case 1:						 //Start Program
@@ -99,7 +100,11 @@ void showMenu(){
 			clearConsole();
 			break;
 
-		case 5:						 //Clear Console
+		case 5:
+			showAllPrograms(processList);
+			break;
+
+		case 6:
 			return;
 			break;
 
@@ -243,9 +248,9 @@ void connectToKernel(char * program){
 
 	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
 
-	   pid = 1; //Le damos un valor cualquiera
+	   globalPid += 1;
 
-	   aux.processId = pid; //Termina de completar estructura
+	   aux.processId = globalPid; //Termina de completar estructura
 	   list_add(processList , &aux);
 	   printf("Programa inicializado.\nThread Id: %u\nPID:%d\n",aux.threadID,aux.processId);
 
@@ -254,10 +259,10 @@ void connectToKernel(char * program){
 	   while(1){
 
 		   printf("Hi! I'm thread: %u\n", self);
-		   sleep(10);
+		   sleep(20);
 		   iterations++; //Grasada para que imprima 3 veces y termine
 
-		   if(iterations == 3){
+		   if(iterations == 30){
 			   printf("Finishing thread %u\n", self);
 			   break;
 		   }
@@ -341,7 +346,10 @@ void joinThreadList(t_list * threadListHead){
 		return;
 	}
 
+
 	for(i = 0; i < threadListSize; i++){
+
+
 
 		aux = list_get(threadListHead, i);
 
@@ -361,9 +369,32 @@ void joinThreadList(t_list * threadListHead){
 }
 
 
-void console_print_programs(t_list * list){
+void showAllPrograms(t_list * threadListHead){
 
-	//TODO:Function to print t_list list of t_process elements
+	int threadListSize = list_size(threadListHead);
+	t_process * aux = NULL;
+	int i = 0;
+
+	printf("Listing active program threads:\n");
+
+	if(threadListSize == 0){
+		printf("There are no active threads\n");
+		return;
+	}
+
+
+	for(i = 0; i < threadListSize; i++){
+
+		aux = list_get(threadListHead, i);
+
+		printf("[%d] - TID: %u  PID: %d\n",i, aux->threadID, aux->processId);
+
+
+	}
+
+
+
+
 
 
 }
