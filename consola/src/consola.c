@@ -230,15 +230,15 @@ void disconnectConsole(){
 	int listSize = list_size(processList);
 	int i;
 	t_process * aux = NULL;
-	int error;
+	int errorCode;
 
 	printf("\nDisconnecting Console\n");
 	for(i=0; i < listSize; i++){
 
 		aux = list_get(processList, i);
 		printf("Aborting Thread: %u PID: %d", aux->threadID, aux->processId);
-		error = pthread_kill(aux->threadID, SIGTERM);
-		if (error == 0){
+		errorCode = pthread_kill(aux->threadID, SIGTERM);
+		if (errorCode == 0){
 			printf("Thread Successfully Aborted");
 		}
 		list_remove(processList, i);
