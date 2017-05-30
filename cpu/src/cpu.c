@@ -22,16 +22,16 @@
 
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = 0;
-	CPU->connections[KERNEL].host = "127.0.0.1";
-	CPU->connections[KERNEL].portNumber = 5000;
-	CPU->connections[KERNEL].server = 0;
-	CPU->connections[KERNEL].socketFileDescriptor = 0;
-	CPU->connections[KERNEL].status = DISCONNECTED;
-	CPU->connections[MEMORY].host = "127.0.0.1";
-	CPU->connections[MEMORY].portNumber = 5001;
-	CPU->connections[MEMORY].server = 0;
-	CPU->connections[MEMORY].socketFileDescriptor = 0;
-	CPU->connections[MEMORY].status = DISCONNECTED;
+	CPU->connections[T_KERNEL].host = "127.0.0.1";
+	CPU->connections[T_KERNEL].portNumber = 5000;
+	CPU->connections[T_KERNEL].server = 0;
+	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
+	CPU->connections[T_KERNEL].status = DISCONNECTED;
+	CPU->connections[T_MEMORY].host = "127.0.0.1";
+	CPU->connections[T_MEMORY].portNumber = 5001;
+	CPU->connections[T_MEMORY].server = 0;
+	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
+	CPU->connections[T_MEMORY].status = DISCONNECTED;
 	CPU->assignedPCB = 0;
 	CPU->currentInstruction = 0;
 	CPU->instructionPointer = 0;
