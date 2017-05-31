@@ -19,6 +19,6 @@ typedef struct kernel_heapMetadata {
 kernel_heapMetadata *memory_getAvailableBlock(void *page, uint32_t size);
 void *memory_addBlock(void *page, uint32_t size);
 void *memory_createPage(uint32_t size);
-//void memory_dumpPage(void *page);
+void memory_dumpPage(void *page);
 
 #endif /* MEMORY_H_ */

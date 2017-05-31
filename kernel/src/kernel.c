@@ -66,7 +66,10 @@ int main(int argc, char **argv) {
 
 void testMemory() {
 	void *page = memory_createPage(page_size);
-	void *block = memory_addBlock(page, 50);
+//	void *block = memory_addBlock(page, 50);
+	void *firstBlock = memory_addBlock(page, 200);
+	void *secondBlock = memory_addBlock(page, 35);
+//	void *thirdBlock = memory_addBlock(page, 157);
 
 	memory_dumpPage(page);
 }
