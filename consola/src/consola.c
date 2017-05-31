@@ -156,13 +156,12 @@ int requestPid(){
 }
 
 
-pthread_t getTidfromPid(int aPid){
+t_process *getTfromPid(int aPid){
 	//TO DO: Ver si se puede hacer con un list_find para hacerlo menos grasuli
 
 
 	t_process * aux = NULL;
 	t_list * threadListHead = processList;
-	int errorCode = 2;
 	int threadListSize = list_size(threadListHead);
 	int i = 0;
 
@@ -174,11 +173,12 @@ pthread_t getTidfromPid(int aPid){
 			aux = list_get(threadListHead, i);
 
 			if(aux->processId == aPid){
-				return aux->threadID;
+				return aux;
 			}
 
 		}
-	return errorCode;
+
+	return NULL;
 }
 
 int getIndexFromTid(pthread_t tid){
@@ -204,10 +204,10 @@ int getIndexFromTid(pthread_t tid){
 }
 void endProgram(int pid){
 	printf("\nFinishing program with PID: %d\n",pid);
-	pthread_t tidToKill = getTidfromPid(pid);
-	int indexOfRemovedThread= getIndexFromTid(tidToKill);
-
-	int result = pthread_kill(tidToKill, SIGKILL);
+	t_process *tToKill = getTfromPid(pid);
+	int indexOfRemovedThread= getIndexFromTid(tToKill->threadID);
+	ipc_client_sendFinishProgram(tToKill->kernelSocket, tToKill->processId);
+	int result = pthread_kill(tToKill->threadID, SIGKILL);
 
 	if(result == 0){
 	    	printf("Program finished successfully\n");
