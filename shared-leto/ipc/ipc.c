@@ -18,8 +18,8 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				ipc_struct_handshake *handshake = malloc(sizeof(ipc_struct_handshake));
 				count = recv(fd, handshake, sizeof(ipc_struct_handshake), 0);
 				deserializedStructHandler(fd, header.operationIdentifier, handshake);
+				break;
 			}
-			break;
 			case PROGRAM_START: {
 				ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
 				ipc_header *header = malloc(sizeof(ipc_header));
@@ -35,6 +35,18 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				programStart->code = codeBuffer;
 
 				deserializedStructHandler(fd, header->operationIdentifier, programStart);
+				break;
+			}
+			case PROGRAM_FINISH: {
+				ipc_struct_program_finish *programFinish = malloc(sizeof(ipc_struct_program_finish));
+				ipc_header *header = malloc(sizeof(ipc_header));
+				recv(fd, header, sizeof(ipc_header), 0);
+				programFinish->header = *header;
+
+				uint32_t pid;
+				recv(fd, &pid, sizeof(uint32_t), 0);
+				programFinish->pid = pid;
+
 				break;
 			}
 		default:
@@ -96,5 +108,17 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	void *buffer = malloc(totalSize);
 	memcpy(buffer, programStart, headerPlusProgramLengthSize);
 	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
+	send(fd, buffer, totalSize, 0);
+}
+
+void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
+	ipc_struct_program_finish *programFinish = malloc(sizeof(ipc_struct_program_finish));
+
+	programFinish->header.operationIdentifier = PROGRAM_FINISH;
+	programFinish->pid = pid;
+
+	int totalSize = sizeof(ipc_header) + sizeof(uint32_t);
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, programFinish, totalSize);
 	send(fd, buffer, totalSize, 0);
 }

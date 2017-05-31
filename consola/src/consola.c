@@ -8,6 +8,12 @@
  ============================================================================
  */
 
+//Ordenados por prioridad descendente.
+//TO DO: Recibir PID del Kernel y no usar el hardcodeado
+//TO DO: Implementar funcionamiento de los programas con archivos (actualmente no hacen nada) y recibir respuestas del kernel (receive)
+//TO DO: Devolver termination status al kernel (Segun si se finishea el proceso o se mata la consola)
+//TO DO: Desconectar consola
+//TO DO: Ver si podemos repetir menos logica con las funciones que devuelven TID e Indice de una lista.
 #include "consola.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +30,8 @@
 #include <ctype.h>
 #include <ipc/serialization.h>
 #include <ipc/ipc.h>
+#include <signal.h>
+#define CONSOLE_DISC 15
 
 
 t_config *consoleConfig;
@@ -32,14 +40,17 @@ int portno;
 char *serverIp = 0;
 t_list * processList;
 
+int globalPid = 0; //Pid global que se incrementa con cada hilo que se crea para poder testear finalizar hilos por pid
 
 typedef struct t_process {
 	pthread_t threadID;
-	int processId;
+	uint32_t processId;
+	int kernelSocket;
 } t_process;
 
 
 int main(int argc, char **argv) {
+
 
 	char *logFile = tmpnam(NULL);
 	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
@@ -57,7 +68,11 @@ int main(int argc, char **argv) {
 
 	showMenu();
 
+	printf("Stopping console execution\n");
 
+	//pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
+	joinThreadList(processList);
+	printf("Closing console\n");
 	return 0;
 
 }
@@ -66,13 +81,14 @@ int main(int argc, char **argv) {
 void showMenu(){
 
 	int menuopt;
+	int unPid;
 	printf("\nConsole Menu:\n");
 
 	char program[50];
 
 	do{
 		printf("\n1-Start Program\n2-End Program\n3-Disconnect Program\n"
-				"4-Clear Console\n");
+				"4-Clear Console\n5-Show current threads\n6-Exit console\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
 		case 1:						 //Start Program
@@ -81,7 +97,8 @@ void showMenu(){
 			break;
 
 		case 2:						 //End Program
-			endProgram();
+			unPid = requestPid();
+			endProgram(unPid);
 			break;
 
 		case 3:						 //Disconnect Program
@@ -92,11 +109,20 @@ void showMenu(){
 			clearConsole();
 			break;
 
+		case 5:
+			showAllPrograms(processList);
+			break;
+
+		case 6:
+			return;
+			break;
+
+
 		default:
 			printf("Invalid input\n");
 			break;
 		}
-	}while (menuopt != 3);
+	}while (menuopt != 6);
 }
 void startProgram(char * programPath) {
 
@@ -105,36 +131,133 @@ void startProgram(char * programPath) {
 	//Thread ID
 	pthread_t threadId;
 
+
 	//Create thread attributes
+
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
+
 	pthread_create(&threadId, &attr, executeProgram, programPath);
+	printf("El tid dentro de SP es: %u", threadId);
 
-	pthread_join(threadId, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
 
 
 
 
 }
 
-
-
-void endProgram(){
-	printf("\nEnd Program\n");
+int requestPid(){
+	int pid;
+	printf("\nEnter pid:\n");
+	scanf("%d", &pid);
+	return pid;
 
 }
 
+
+t_process *getTfromPid(int aPid){
+	//TO DO: Ver si se puede hacer con un list_find para hacerlo menos grasuli
+
+
+	t_process * aux = NULL;
+	t_list * threadListHead = processList;
+	int threadListSize = list_size(threadListHead);
+	int i = 0;
+
+
+
+
+		for(i = 0; i < threadListSize; i++){
+
+			aux = list_get(threadListHead, i);
+
+			if(aux->processId == aPid){
+				return aux;
+			}
+
+		}
+
+	return NULL;
+}
+
+int getIndexFromTid(pthread_t tid){
+
+	t_process * aux = NULL;
+	t_list * threadListHead = processList;
+	int errorCode = -1;
+	int threadListSize = list_size(threadListHead);
+	int i = 0;
+
+
+		for(i = 0; i < threadListSize; i++){
+
+			aux = list_get(threadListHead, i);
+
+			if(aux->threadID == tid){
+				return i;
+			}
+
+		}
+	return errorCode;
+
+}
+void endProgram(int pid){
+	printf("\nFinishing program with PID: %d\n",pid);
+	t_process *tToKill = getTfromPid(pid);
+	int indexOfRemovedThread= getIndexFromTid(tToKill->threadID);
+	ipc_client_sendFinishProgram(tToKill->kernelSocket, tToKill->processId);
+	int result = pthread_kill(tToKill->threadID, SIGKILL);
+
+	if(result == 0){
+	    	printf("Program finished successfully\n");
+	    }else{
+	    	printf("Error - program not finished successfully\n");
+	    }
+
+
+	/*int result = pthread_kill(tidToKill, 2);
+
+    if(result == 0){
+    	printf("Program finished successfully");
+    }*/
+
+	list_remove(processList, indexOfRemovedThread);
+
+	//TO DO: Mandar mensaje al kernel con termination status?
+
+}
 
 
 void disconnectConsole(){
+
+	int listSize = list_size(processList);
+	int i;
+	t_process * aux = NULL;
+	int errorCode;
+	int consoleDisc = CONSOLE_DISC;
 	printf("\nDisconnecting Console\n");
+	for(i=0; i < listSize; i++){
+
+		aux = list_get(processList, i);
+		printf("Aborting Thread: %u PID: %u", aux->threadID, aux->processId);
+		send(aux->kernelSocket, &consoleDisc, sizeof(int), 0);
+		errorCode = pthread_kill(aux->threadID, SIGKILL);
+		if (errorCode == 0){
+			printf("Thread Successfully Aborted");
+		}else{
+			printf("Thread Not Aborted Correctly");
+		}
+		list_remove(processList, i);
+
+	}
+
+
 
 }
 
 
 void clearConsole(){
-	printf("\Cleanning console\n");
 	system("clear");
 	return;
 }
@@ -148,7 +271,6 @@ void requestFilePath(char *filePath){
 	//puts(filePath);
 
 }
-
 
 
 void *executeProgram(void *arg){
@@ -210,20 +332,38 @@ void connectToKernel(char * program){
 	   // Now sends the program and is read by server
 
 	   void *buffer = 0;
-	   programLength = parser_getAnSISOPFromFile(program, &buffer);
+	   //Comennto parte de archivo para poder trabajar sin archivos y probar la lista de t_process
+	   //programLength = parser_getAnSISOPFromFile(program, &buffer);
 
-	   log_debug(logger, "Read file. %s. Size: %d", program, programLength);
-	   dump_buffer(buffer, programLength);
-	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
+	   //log_debug(logger, "Read file. %s. Size: %d", program, programLength);
+	   //dump_buffer(buffer, programLength);
+	  // ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
 	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
 
-	   pid = 1; //Le damos un valor cualquiera
-
-	   aux.processId = pid; //Termina de completar estructura
-
+	   aux.kernelSocket = sockfd;
+	   recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
 	   list_add(processList , &aux);
 
+
+	   printf("Program Started.\nThread Id: %u\nPID:%u\n",aux.threadID,aux.processId);
+
+	   int iterations = 0;
+
+	   while(1){
+
+		   printf("Hi! I'm thread: %u\n", self);
+		   sleep(20);
+		   iterations++; //Grasada para que imprima 3 veces y termine
+
+		   if(iterations == 30){
+			   printf("Finishing thread %u\n", self);
+			   break;
+		   }
+
+
+
+	   }
 
 	   return;
 }
@@ -285,4 +425,70 @@ void dump_buffer(void *buffer, int size)
 			}
 		}
 	}
+}
+
+
+void joinThreadList(t_list * threadListHead){
+
+
+	int threadListSize = list_size(threadListHead);
+	t_process * aux = NULL;
+	int i = 0;
+
+	if(threadListSize == 0){
+		printf("There are no threads to join\n");
+		return;
+	}
+
+
+	for(i = 0; i < threadListSize; i++){
+
+
+
+		aux = list_get(threadListHead, i);
+
+		printf("Waiting for Thread[%d]: %u from process %u\n",i, aux->threadID, aux->processId);
+
+		pthread_join(aux->threadID, NULL);  //NULL means that it isn't going to catch the return value from pthread_exit
+
+		printf("Thread:[%d] - %u successfully joined\n",i, aux->threadID);
+
+
+	}
+
+
+	printf("All the threads have joined!\n");
+
+
+}
+
+
+void showAllPrograms(t_list * threadListHead){
+
+	int threadListSize = list_size(threadListHead);
+	t_process * aux = NULL;
+	int i = 0;
+
+	printf("Listing active program threads:\n");
+
+	if(threadListSize == 0){
+		printf("There are no active threads\n");
+		return;
+	}
+
+
+	for(i = 0; i < threadListSize; i++){
+
+		aux = list_get(threadListHead, i);
+
+		printf("[%d] - TID: %u  PID: %u\n",i, aux->threadID, aux->processId);
+
+
+	}
+
+
+
+
+
+
 }
