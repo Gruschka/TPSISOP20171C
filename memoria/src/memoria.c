@@ -8,7 +8,6 @@
  ============================================================================
  */
 
-// TODO: levantar todo desde archivo de config
 // TODO: dar un máximo de cache para cada proceso
 // TODO: integración con IPC
 // TODO: consola de la memoria
@@ -19,8 +18,10 @@
 #include <math.h>
 #include <limits.h>
 #include <time.h>
+#include <commons/config.h>
 
 typedef unsigned char mem_bool;
+static u_int32_t k_connectionPort;
 static u_int32_t k_numberOfPages;
 
 void millisleep(u_int32_t milliseconds) {
@@ -37,10 +38,10 @@ typedef struct mem_page_entry {
     int32_t processPageNumber;
 } mem_page_entry;
 
-static const u_int32_t k_numberOfFrames = 500;
-static const u_int32_t k_frameSize = 256;
+static u_int32_t k_numberOfFrames;
+static u_int32_t k_frameSize;
 static void *physicalMemory;
-static u_int32_t k_physicalMemoryAccessDelay = 100;
+static u_int32_t k_physicalMemoryAccessDelay;
 
 int64_t calculatePair(int32_t k1, int32_t k2) {
 	return ((int64_t)k1 << 32) + (int64_t)k2;
@@ -191,8 +192,8 @@ typedef struct mem_cached_page_entry {
 	void *pageContentPointer;
 } mem_cached_page_entry;
 
-static const u_int32_t k_maxPagesInCache = 15;
-static const u_int32_t k_maxPagesForEachProcessInCache = 3;
+static u_int32_t k_numberOfEntriesInCache;
+static u_int32_t k_maxPagesForEachProcessInCache;
 static void *cache;
 static u_int32_t cache_currentCacheLRUCounter = 0;
 
@@ -202,7 +203,7 @@ mem_cached_page_entry *cache_getEntryPointerForIndex(int index) {
 
 mem_cached_page_entry *cache_getEntryPointer(int32_t processID, int32_t processPageNumber) {
 	int i;
-	for (i = 0; i < k_maxPagesInCache; i++) {
+	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
 		if (entry->processID == processID && entry->processPageNumber == processPageNumber) {
 			return entry;
@@ -218,7 +219,7 @@ mem_cached_page_entry *cache_getEntryPointerOrLRUEntryPointer(int32_t processID,
 
 	mem_cached_page_entry *lruEntry = cache_getEntryPointerForIndex(0);
 	int i;
-	for (i = 1; i < k_maxPagesInCache; i++) {
+	for (i = 1; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
 		if (entry->lruCounter < lruEntry->lruCounter) {
 			lruEntry = entry;
@@ -361,7 +362,7 @@ void mem_deinitProcess(int32_t processID) {
 
 	// Luego destruimos las entradas de las páginas
 	// de la cache
-	for (i = 0; i < k_maxPagesInCache; i++) {
+	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
 		if (entry->processID == processID) {
 			entry->processID = -1;
@@ -423,7 +424,17 @@ void menu_size() {
 
 //////// Fin de consola
 
-int main(void) {
+int main(int argc, char **argv) {
+	// Configuración
+	char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
+	t_config *config = config_create(configPath);
+	k_connectionPort = config_get_int_value(config, "PUERTO");
+	k_numberOfFrames = config_get_int_value(config, "MARCOS");
+	k_frameSize = config_get_int_value(config, "MARCO_SIZE");
+	k_numberOfEntriesInCache = config_get_int_value(config, "ENTRADAS_CACHE");
+	k_maxPagesForEachProcessInCache = config_get_int_value(config, "CACHE_X_PROC");
+	k_physicalMemoryAccessDelay = config_get_int_value(config, "RETARDO_MEMORIA");
+
 	// Physical memory initialization
 	printf("Inicializando memoria física.\n");
 	int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
@@ -439,8 +450,8 @@ int main(void) {
 
 	// Cache memory initialization
 	printf("Inicializando memoria cache.\n");
-	cache = malloc(k_maxPagesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
-	for (i = 0; i < k_maxPagesInCache; i++) {
+	cache = malloc(k_numberOfEntriesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
+	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
 		entry->processID = -1;
 		entry->processPageNumber = -1;
