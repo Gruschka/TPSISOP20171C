@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <time.h>
 #include <commons/config.h>
+#include <commons/log.h>
 
 typedef unsigned char mem_bool;
 static u_int32_t k_connectionPort;
@@ -374,6 +375,16 @@ void mem_deinitProcess(int32_t processID) {
 
 //////// Fin de interfaz pública
 
+//////// Dumps
+
+void dump_cache() {
+	char *logPath = "./src/cache_dump.txt";
+	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+	// TODO: dumpear cache
+}
+
+//////// Fin de dumps
+
 //////// Comienzo de consola
 
 void menu_configurePhysicalMemoryDelay() {
@@ -396,7 +407,7 @@ void menu_dump() {
 		scanf("%d", &optionIndex);
 		switch (optionIndex) {
 		case 0: printf("No se dumpeó nada.\n\n"); break;
-		case 1: printf("TODO: dumpear cache.\n\n"); break;
+		case 1: dump_cache(); break;
 		case 2: printf("TODO: dumpear estructuras administrativas.\n\n"); break;
 		case 3: printf("TODO: dumpear contenido de la memoria.\n\n"); break;
 		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
@@ -427,6 +438,7 @@ void menu_size() {
 int main(int argc, char **argv) {
 	// Configuración
 	char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
+	printf("Levantando configuración del archivo '%s'.\n", configPath);
 	t_config *config = config_create(configPath);
 	k_connectionPort = config_get_int_value(config, "PUERTO");
 	k_numberOfFrames = config_get_int_value(config, "MARCOS");
