@@ -16,6 +16,8 @@ void endProgram(int  pid);
 void disconnectProgram();
 void clearConsole();
 void *executeProgram(void *arg);
+void disconnectConsole();
+void requestFilePath(char *filePath);
 void connectToKernel(char *);
 int requestPid();
 void dump_buffer(void *buffer, int size);
