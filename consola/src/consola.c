@@ -50,7 +50,15 @@ typedef struct t_process {
 
 void programThread_sig_handler(int signo)
 {
-  pthread_exit(0);
+    write(1, "sig", 4);
+
+	  if (signo == SIGUSR1){
+	    write(1, "exi", 4);
+	    pthread_exit(0);
+	  }
+
+	    write(1, "sig", 4);
+
 
 
 }
@@ -112,7 +120,7 @@ void showMenu(){
 			break;
 		}
 		case 5:{
-			showList();
+			showCurrentThreads();
 			break;
 		}
 		default:
@@ -159,9 +167,6 @@ t_process *getThreadfromPid(int aPid){
 	int threadListSize = list_size(processList);
 	int i = 0;
 
-
-
-
 		for(i = 0; i < threadListSize; i++){
 
 			aux = list_get(processList, i);
@@ -196,23 +201,26 @@ int getIndexFromTid(pthread_t tid){
 
 }
 void endProgram(int pid){
-	printf("\nFinishing program with PID: %d\n",pid);
-	t_process *tToKill = getThreadfromPid(pid);
-	int indexOfRemovedThread= getIndexFromTid(tToKill->threadID);
-	int result = 0;
-	printf("Se va a matar pid %d. socket: %d thread: %u", tToKill->processId, tToKill->kernelSocket, tToKill->threadID);
-	ipc_client_sendFinishProgram(tToKill->kernelSocket, tToKill->processId);
-	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
-	        printf("\ncan't catch SIGUSR1\n");
-	//result = pthread_cancel(tToKill->threadID);
 
-	if (result != 0){
-	    perror("Error: Thread not finished successfully");
-	}
+	t_process *threadToKill = getThreadfromPid(pid);
+	int indexOfRemovedThread= getIndexFromTid(threadToKill->threadID);
+	int result = pthread_kill(threadToKill, SIGUSR1);
+	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n", threadToKill->processId, threadToKill->kernelSocket, threadToKill->threadID);
+	ipc_client_sendFinishProgram(threadToKill->kernelSocket, threadToKill->processId);
+
+	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
+	 	        printf("\ncan't catch SIGUSR1\n");
+
+	result = pthread_kill(threadToKill->threadID, SIGUSR1);
+
+	 if (result != 0){
+		    perror("Error: Thread not finished successfully");
+ 	}
+
+
 	printf("\n\nLLEGO CHETITO ACA\n\n");
 
 	list_remove(processList, indexOfRemovedThread);
-	pthread_exit(0);
 
 }
 
@@ -262,8 +270,6 @@ void requestFilePath(char *filePath){
 
 void *executeProgram(void *arg){
 
-
-	printf("Execute ");
 
 	char * program = (char *)arg;
 
@@ -332,7 +338,17 @@ void connectToKernel(char * program){
 	   	aux->processId = 1;
 	   //recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
 	   	list_add(processList , aux);
+	   	int iterations = 0;
 	   	while(1){
+
+	   		printf("Hi! I'm thread %u\n",aux->threadID);
+	   		sleep(5);
+	   		if(iterations == 5){
+	   			printf("Finishing %u\n",aux->threadID);
+	   			break;
+	   		}
+
+	   		iterations++;
 
 	   	}
 
@@ -398,12 +414,13 @@ void dump_buffer(void *buffer, int size)
 	}
 }
 
-void showList (){
+void showCurrentThreads(){
 	int listSize = list_size(processList);
 	int i;
 	t_process * aux;
+	if(listSize == 0) printf("No threads currently in execution\n");
 	for (i=0 ; i<listSize; i++){
 		aux = list_get(processList, i);
-		printf("\n\nThread: %u\n\n", aux->threadID);
+		printf("[%d] - TID: %u  PID: %u\n",i, aux->threadID, aux->processId);
 	}
 }
