@@ -50,13 +50,7 @@ typedef struct t_process {
 
 void programThread_sig_handler(int signo)
 {
-  write(1, "asd", 4);
-
-  if (signo == SIGUSR1){
-    write(1, "sig", 4);
-    pthread_exit(0);
-  }
-    write(1, "sig", 4);
+  pthread_exit(0);
 
 
 }
@@ -96,7 +90,7 @@ void showMenu(){
 
 	do{
 		printf("\n1-Start Program\n2-End Program\n3-Disconnect Program\n"
-				"4-Clear Console\n5-Show current threads\n6-Exit console\n");
+				"4-Clear Console\n5-Show current threads\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
 		case 1:	{					 //Start Program
@@ -115,6 +109,10 @@ void showMenu(){
 		}
 		case 4:{						 //Clear Console
 			clearConsole();
+			break;
+		}
+		case 5:{
+			showList();
 			break;
 		}
 		default:
@@ -206,14 +204,15 @@ void endProgram(int pid){
 	ipc_client_sendFinishProgram(tToKill->kernelSocket, tToKill->processId);
 	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
 	        printf("\ncan't catch SIGUSR1\n");
-	result = pthread_kill(tToKill->threadID, SIGUSR1);
+	//result = pthread_cancel(tToKill->threadID);
+
 	if (result != 0){
 	    perror("Error: Thread not finished successfully");
 	}
-
+	printf("\n\nLLEGO CHETITO ACA\n\n");
 
 	list_remove(processList, indexOfRemovedThread);
-
+	pthread_exit(0);
 
 }
 
@@ -396,5 +395,15 @@ void dump_buffer(void *buffer, int size)
 				break;
 			}
 		}
+	}
+}
+
+void showList (){
+	int listSize = list_size(processList);
+	int i;
+	t_process * aux;
+	for (i=0 ; i<listSize; i++){
+		aux = list_get(processList, i);
+		printf("\n\nThread: %u\n\n", aux->threadID);
 	}
 }

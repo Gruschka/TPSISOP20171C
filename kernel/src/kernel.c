@@ -106,3 +106,5 @@ void consolesServerSocket_handleNewConnection(int fd) {
 void consolesServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 }
+
+
