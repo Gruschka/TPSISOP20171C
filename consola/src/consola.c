@@ -335,16 +335,20 @@ void connectToKernel(char * program){
 	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
 
 	   	aux->kernelSocket = sockfd;
-	   	aux->processId = 1;
+	   	aux->processId = globalPid;
+	   	globalPid++;
 	   //recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
 	   	list_add(processList , aux);
 	   	int iterations = 0;
+	   	int newThreadIndex = getIndexFromTid(aux->threadID);
 	   	while(1){
 
 	   		printf("Hi! I'm thread %u\n",aux->threadID);
 	   		sleep(5);
 	   		if(iterations == 5){
 	   			printf("Finishing %u\n",aux->threadID);
+
+	   			list_remove(processList, newThreadIndex);
 	   			break;
 	   		}
 
