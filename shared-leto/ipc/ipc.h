@@ -17,6 +17,7 @@ typedef void (*EpollDeserializedStructEventHandler)(int fd, ipc_operationIdentif
 void ipc_client_sendHandshake(ipc_processIdentifier processIdentifier, int fd);
 ipc_struct_handshake_response *ipc_client_waitHandshakeResponse(int fd);
 void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code);
+void ipc_client_sendFinishProgram(int fd, uint32_t pid);
 
 // Server
 int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandler, EpollDisconnectionEventHandler disconnectionHandler, EpollDeserializedStructEventHandler deserializedStructHandler);

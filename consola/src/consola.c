@@ -91,32 +91,32 @@ void showMenu(){
 				"4-Clear Console\n5-Show current threads\n6-Exit console\n");
 		scanf("%d",&menuopt);
 		switch(menuopt){
-		case 1:						 //Start Program
+		case 1:	{					 //Start Program
 			requestFilePath(program);//Save in program the file path of the file
 			startProgram(program);
 			break;
-
-		case 2:						 //End Program
+		}
+		case 2: {						 //End Program
 			unPid = requestPid();
 			endProgram(unPid);
 			break;
-
-		case 3:						 //Disconnect Program
+		}
+		case 3:{						 //Disconnect Program
 			disconnectConsole();
 			break;
-
-		case 4:						 //Clear Console
+		}
+		case 4:{						 //Clear Console
 			clearConsole();
 			break;
-
-		case 5:
+		}
+		/*case 5:
 			showAllPrograms(processList);
 			break;
 
 		case 6:
 			return;
 			break;
-
+		*/
 
 		default:
 			printf("Invalid input\n");
@@ -206,8 +206,9 @@ void endProgram(int pid){
 	printf("\nFinishing program with PID: %d\n",pid);
 	t_process *tToKill = getTfromPid(pid);
 	int indexOfRemovedThread= getIndexFromTid(tToKill->threadID);
+	printf("Se va a matar pid %d. socket: %d", tToKill->processId, tToKill->kernelSocket);
 	ipc_client_sendFinishProgram(tToKill->kernelSocket, tToKill->processId);
-	int result = pthread_kill(tToKill->threadID, SIGKILL);
+	int result = pthread_kill(tToKill->threadID, SIGTERM);
 
 	if(result == 0){
 	    	printf("Program finished successfully\n");
@@ -234,19 +235,20 @@ void disconnectConsole(){
 	int listSize = list_size(processList);
 	int i;
 	t_process * aux = NULL;
-	int errorCode;
+	int errorCode=0;
 	int consoleDisc = CONSOLE_DISC;
 	printf("\nDisconnecting Console\n");
 	for(i=0; i < listSize; i++){
 
 		aux = list_get(processList, i);
 		printf("Aborting Thread: %u PID: %u", aux->threadID, aux->processId);
-		send(aux->kernelSocket, &consoleDisc, sizeof(int), 0);
-		errorCode = pthread_kill(aux->threadID, SIGKILL);
+		//send(aux->kernelSocket, &consoleDisc, sizeof(int), 0);
+		ipc_client_sendFinishProgram(aux->kernelSocket,aux->processId);
+		errorCode = pthread_kill(aux->threadID, SIGUSR1);
 		if (errorCode == 0){
 			printf("Thread Successfully Aborted");
 		}else{
-			printf("Thread Not Aborted Correctly");
+			printf("Thread Not Aborted Correctly. Error code: %d", errorCode);
 		}
 		list_remove(processList, i);
 
@@ -272,11 +274,11 @@ void requestFilePath(char *filePath){
 
 }
 
-
 void *executeProgram(void *arg){
 
 
 	printf("Execute ");
+	signal(SIGUSR1, sig_handler);
 
 	char * program = (char *)arg;
 
@@ -296,9 +298,9 @@ void connectToKernel(char * program){
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
 		int programLength;
-		t_process aux; // Para la lista de PIDs y Thread Ids
+		t_process *aux = malloc(sizeof(t_process)); // Para la lista de PIDs y Thread Ids
 		pthread_t self = pthread_self();
-		aux.threadID = self;
+		aux->threadID = self;
 
 		printf("EL programa es: %s", program);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
@@ -333,37 +335,18 @@ void connectToKernel(char * program){
 
 	   void *buffer = 0;
 	   //Comennto parte de archivo para poder trabajar sin archivos y probar la lista de t_process
-	   //programLength = parser_getAnSISOPFromFile(program, &buffer);
+	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
-	   //log_debug(logger, "Read file. %s. Size: %d", program, programLength);
-	   //dump_buffer(buffer, programLength);
-	  // ipc_client_sendStartProgram(sockfd, programLength, buffer);
+	   log_debug(logger, "Read file. %s. Size: %d", program, programLength);
+	   dump_buffer(buffer, programLength);
+	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
 	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
 
-	   aux.kernelSocket = sockfd;
-	   recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
-	   list_add(processList , &aux);
-
-
-	   printf("Program Started.\nThread Id: %u\nPID:%u\n",aux.threadID,aux.processId);
-
-	   int iterations = 0;
-
-	   while(1){
-
-		   printf("Hi! I'm thread: %u\n", self);
-		   sleep(20);
-		   iterations++; //Grasada para que imprima 3 veces y termine
-
-		   if(iterations == 30){
-			   printf("Finishing thread %u\n", self);
-			   break;
-		   }
-
-
-
-	   }
+	   	aux->kernelSocket = sockfd;
+	   	aux->processId = 1;
+	   //recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
+	   	list_add(processList , aux);
 
 	   return;
 }
