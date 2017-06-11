@@ -27,6 +27,7 @@ static t_config *__config;
 t_kernel_config *configuration;
 t_log *logger;
 uint32_t page_size;
+uint32_t lastPID;
 
 void testMemory();
 
@@ -41,6 +42,8 @@ int main(int argc, char **argv) {
 
 	log_info(logger, "Comenzó la ejecución");
 	log_info(logger, "Log file: %s", logFile);
+
+	lastPID = 0;
 
 	if (argc < 2) {
 		log_error(logger, "Falta pasar la ruta del archivo de configuracion");
@@ -108,6 +111,16 @@ void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifi
 			memcpy(codeString, programStart->code, programStart->codeLength);
 			codeString[programStart->codeLength] = '\0';
 			log_info(logger, "Program received. Code length: %d. Code: %s", programStart->codeLength, codeString);
+
+			ipc_struct_program_start_response *response = malloc(sizeof(ipc_struct_program_start_response));
+			response->header = PROGRAM_START_RESPONSE;
+			response->pid = lastPID++;
+			send(fd, response, sizeof(ipc_struct_program_start_response));
+			break;
+		}
+		case PROGRAM_FINISH: {
+			ipc_struct_program_finish *programFinish = buffer;
+			log_info(logger, "Program finish received: pid: %d", programFinish->pid);
 			break;
 		}
 		default:

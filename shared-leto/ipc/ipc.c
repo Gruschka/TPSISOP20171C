@@ -47,6 +47,7 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				recv(fd, &pid, sizeof(uint32_t), 0);
 				programFinish->pid = pid;
 
+				deserializedStructHandler(fd, header->operationIdentifier, programFinish);
 				break;
 			}
 		default:
