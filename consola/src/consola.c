@@ -332,12 +332,10 @@ void connectToKernel(char * program){
 	   dump_buffer(buffer, programLength);
 	   ipc_client_sendStartProgram(sockfd, programLength, buffer);
 
-	   //Aca deberiamos recibir el PID del hilo por parte del Kernel
-
+	   	ipc_struct_program_start_response *startResponse = ipc_client_receiveStartProgramResponse(sockfd);
 	   	aux->kernelSocket = sockfd;
-	   	aux->processId = globalPid;
-	   	globalPid++;
-	   //recv(sockfd,&aux.processId, sizeof(uint32_t),MSG_WAITALL);
+	   	aux->processId = startResponse->pid;
+	   	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
 	   	list_add(processList , aux);
 	   	int iterations = 0;
 	   	int newThreadIndex = getIndexFromTid(aux->threadID);

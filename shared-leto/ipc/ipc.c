@@ -111,6 +111,29 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	send(fd, buffer, totalSize, 0);
 }
 
+void ipc_sendStartProgramResponse(int fd, uint32_t pid) {
+	ipc_struct_program_start_response response = { {PROGRAM_START_RESPONSE}, pid };
+
+	send(fd, &response, sizeof(response), 0);
+}
+
+ipc_struct_program_start_response *ipc_client_receiveStartProgramResponse(int fd) {
+	ipc_header *header = malloc(sizeof(ipc_header));
+	ipc_struct_program_start_response *response = malloc(sizeof(ipc_struct_program_start_response));
+
+	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
+	if (count == sizeof(ipc_header) && header->operationIdentifier == PROGRAM_START_RESPONSE) {
+		read(fd, response, sizeof(ipc_struct_program_start_response));
+	} else {
+		free(header);
+		free(response);
+		return NULL;
+	}
+
+	free(header);
+	return response;
+}
+
 void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
 	ipc_struct_program_finish *programFinish = malloc(sizeof(ipc_struct_program_finish));
 

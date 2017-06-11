@@ -36,4 +36,9 @@ void consolesServerSocket_handleNewConnection(int fd);
 
 void consolesServerSocket_handleDisconnection(int fd);
 
+void *scheduler_mainFunction(void);
+void *dispatcher_mainFunction(void);
+
+void executeNewProgram(t_PCB *pcb);
+
 #endif /* KERNEL_H_ */
