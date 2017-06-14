@@ -15,6 +15,7 @@
 #include <string.h>
 #include <pthread.h>
 
+#include "memory.h"
 #include "scheduling.h"
 #include <commons/config.h>
 #include <commons/log.h>
@@ -31,6 +32,20 @@ pthread_t schedulerThread;
 pthread_t dispatcherThread;
 
 uint32_t lastPID = 1;
+uint32_t pageSize = 512;
+
+void testMemory() {
+	void *page = memory_createPage(pageSize);
+//	void *block = memory_addBlock(page, 50);
+	void *firstBlock = memory_addBlock(page, 200);
+	void *secondBlock = memory_addBlock(page, 35);
+	void *thirdBlock = memory_addBlock(page, 157);
+	void *fourthBlock = memory_addBlock(page, 43);
+
+	log_debug(logger, "fourthBlock: %p", fourthBlock);
+
+	memory_dumpPage(page);
+}
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -57,6 +72,8 @@ int main(int argc, char **argv) {
 	newQueue = newQueue_create();
 	readyQueue = readyQueue_create();
 	execList = execList_create();
+
+	testMemory();
 
 	int i;
 	for (i = 0; i < configuration->multiprogrammingDegree; i++) {
