@@ -47,6 +47,8 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				recv(fd, &pid, sizeof(uint32_t), 0);
 				programFinish->pid = pid;
 
+				deserializedStructHandler(fd, header->operationIdentifier, programFinish);
+
 				break;
 			}
 		default:
@@ -144,4 +146,27 @@ void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
 	void *buffer = malloc(totalSize);
 	memcpy(buffer, programFinish, totalSize);
 	send(fd, buffer, totalSize, 0);
+}
+
+void ipc_client_requestNewPage(int fd, uint32_t pid) {
+	ipc_struct_memory_new_page newPageRequest = { {PROGRAM_FINISH}, pid };
+
+	send(fd, &newPageRequest, sizeof(ipc_struct_memory_new_page), 0);
+}
+
+ipc_struct_memory_new_page *ipc_memory_receiveNewPageRequest(int fd) {
+	ipc_header *header = malloc(sizeof(ipc_header));
+	ipc_struct_memory_new_page *response = malloc(sizeof(ipc_struct_memory_new_page));
+
+	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
+	if (count == sizeof(ipc_header) && header->operationIdentifier == MEMORY_NEW_PAGE) {
+		read(fd, response, sizeof(ipc_struct_memory_new_page));
+	} else {
+		free(header);
+		free(response);
+		return NULL;
+	}
+
+	free(header);
+	return response;
 }
