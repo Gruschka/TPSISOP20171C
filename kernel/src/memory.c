@@ -31,13 +31,16 @@ void *memory_addBlock(void *page, uint32_t size) {
 		return NULL;
 	} else { // Devuelvo el puntero al bloque reservado
 		uint32_t remainingSize = newBlockMetadata->size - size - sizeof(kernel_heapMetadata);
-		kernel_heapMetadata nextBlockMetadata = { remainingSize, true };
 
 		newBlockMetadata->isFree = false;
 		newBlockMetadata->size = size;
 
-		memcpy((void *)newBlockMetadata + sizeof(kernel_heapMetadata) + size, &nextBlockMetadata, sizeof(kernel_heapMetadata));
-		return (void *)newBlockMetadata + sizeof(kernel_heapMetadata);
+		if (remainingSize >= sizeof(kernel_heapMetadata)) {
+			kernel_heapMetadata nextBlockMetadata = { remainingSize, true };
+
+			memcpy((void *)newBlockMetadata + sizeof(kernel_heapMetadata) + size, &nextBlockMetadata, sizeof(kernel_heapMetadata));
+			return (void *)newBlockMetadata + sizeof(kernel_heapMetadata);
+		}
 	}
 
 	return NULL;
@@ -49,10 +52,9 @@ kernel_heapMetadata *memory_getAvailableBlock(void *page, uint32_t size) {
 	uint32_t offset = 0;
 	kernel_heapMetadata metadata;
 
-	while (!found) {
-		if (offset >= pageSize) break;
+	while (!found && offset < pageSize) {
 		memcpy(&metadata, page + offset, sizeof(kernel_heapMetadata));
-		if (metadata.isFree && metadata.size >= size + sizeof(kernel_heapMetadata)) { // está disponible y tiene espacio
+		if (metadata.isFree && (metadata.size >= size + sizeof(kernel_heapMetadata) || metadata.size == size)) { // está disponible y tiene espacio
 			found = true;
 		} else if (metadata.isFree && metadata.size == 0) { // es el ultimo bloque PONELE
 			break;

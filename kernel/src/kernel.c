@@ -131,6 +131,10 @@ void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifi
 			executeNewProgram(newProgram);
 			break;
 		}
+		case PROGRAM_FINISH: {
+			log_info(logger, "New program finish. fd: %d", fd);
+			break;
+		}
 		default:
 			break;
 	}
