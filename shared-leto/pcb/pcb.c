@@ -41,7 +41,7 @@ t_PCB pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPo
 	list_add(dummyStack0.variables,&variableB);
 
 	list_add(dummyReturn.stackIndex,&dummyStack0);
-	t_stackIndexRecord out = (t_stackIndexRecord *) list_get(dummyReturn.stackIndex,0);
+	//t_stackIndexRecord out = (t_stackIndexRecord *) list_get(dummyReturn.stackIndex,0);
 	return dummyReturn;
 }
 

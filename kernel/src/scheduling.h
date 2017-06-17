@@ -34,19 +34,22 @@ pthread_mutex_t blockQueue_mutex;
 pthread_mutex_t execList_mutex;
 
 //Semaphores
-sem_t newQueue_processCount;
-sem_t readyQueue_processCount;
+sem_t newQueue_programsCount;
+sem_t readyQueue_availableSpaces;
+sem_t readyQueue_programsCount;
 sem_t availableCPUs;
+sem_t exec_spaces;
+sem_t exec_programs;
 
 //Functions
 t_queue *newQueue_create();
-t_PCB *newQueue_popThread();
+t_PCB *newQueue_popProcess();
 void newQueue_addProcess(t_PCB *process);
 
 t_list *readyQueue_create();
 void readyQueue_addProcess(t_PCB *process);
 void readyQueue_dump();
-t_PCB *readyQueue_popThread();
+t_PCB *readyQueue_popProcess();
 
 t_queue *exitQueue_create();
 void exitQueue_addProcess(t_PCB *process);

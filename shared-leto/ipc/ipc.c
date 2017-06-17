@@ -18,8 +18,8 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				ipc_struct_handshake *handshake = malloc(sizeof(ipc_struct_handshake));
 				count = recv(fd, handshake, sizeof(ipc_struct_handshake), 0);
 				deserializedStructHandler(fd, header.operationIdentifier, handshake);
+				break;
 			}
-			break;
 			case PROGRAM_START: {
 				ipc_struct_program_start *programStart = malloc(sizeof(ipc_struct_program_start));
 				ipc_header *header = malloc(sizeof(ipc_header));
@@ -35,6 +35,18 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				programStart->code = codeBuffer;
 
 				deserializedStructHandler(fd, header->operationIdentifier, programStart);
+				break;
+			}
+			case PROGRAM_FINISH: {
+				ipc_struct_program_finish *programFinish = malloc(sizeof(ipc_struct_program_finish));
+				ipc_header *header = malloc(sizeof(ipc_header));
+				recv(fd, header, sizeof(ipc_header), 0);
+				programFinish->header = *header;
+
+				uint32_t pid;
+				recv(fd, &pid, sizeof(uint32_t), 0);
+				programFinish->pid = pid;
+
 				break;
 			}
 		default:
@@ -97,4 +109,62 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	memcpy(buffer, programStart, headerPlusProgramLengthSize);
 	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
 	send(fd, buffer, totalSize, 0);
+}
+
+void ipc_sendStartProgramResponse(int fd, uint32_t pid) {
+	ipc_struct_program_start_response response = { {PROGRAM_START_RESPONSE}, pid };
+
+	send(fd, &response, sizeof(response), 0);
+}
+
+ipc_struct_program_start_response *ipc_client_receiveStartProgramResponse(int fd) {
+	ipc_header *header = malloc(sizeof(ipc_header));
+	ipc_struct_program_start_response *response = malloc(sizeof(ipc_struct_program_start_response));
+
+	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
+	if (count == sizeof(ipc_header) && header->operationIdentifier == PROGRAM_START_RESPONSE) {
+		read(fd, response, sizeof(ipc_struct_program_start_response));
+	} else {
+		free(header);
+		free(response);
+		return NULL;
+	}
+
+	free(header);
+	return response;
+}
+
+void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
+	ipc_struct_program_finish *programFinish = malloc(sizeof(ipc_struct_program_finish));
+
+	programFinish->header.operationIdentifier = PROGRAM_FINISH;
+	programFinish->pid = pid;
+
+	int totalSize = sizeof(ipc_header) + sizeof(uint32_t);
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, programFinish, totalSize);
+	send(fd, buffer, totalSize, 0);
+}
+
+void ipc_client_requestNewPage(int fd, uint32_t pid) {
+	ipc_struct_memory_new_page newPageRequest = { {PROGRAM_FINISH}, pid };
+
+	send(fd, &newPageRequest, sizeof(ipc_struct_memory_new_page), 0);
+}
+
+ipc_struct_memory_new_page *ipc_memory_receiveNewPageRequest(int fd) {
+	ipc_header *header = malloc(sizeof(ipc_header));
+	ipc_struct_memory_new_page *response = malloc(sizeof(ipc_struct_memory_new_page));
+
+	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
+	if (count == sizeof(ipc_header) && header->operationIdentifier == MEMORY_NEW_PAGE) {
+		read(fd, response, sizeof(ipc_struct_memory_new_page));
+	} else {
+		free(header);
+		free(response);
+		return NULL;
+	}
+
+	free(header);
+	return response;
 }

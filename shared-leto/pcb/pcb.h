@@ -27,7 +27,7 @@ typedef struct t_stackIndexRecord {
 
 
 typedef struct t_PCB {
-	int pid; // Process ID
+	uint32_t pid; // Process ID
 	int pc; // Program Counter
 	int sp;	// Stack Pointer
 	int ec;	// Exit Code
