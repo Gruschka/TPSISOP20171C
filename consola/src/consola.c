@@ -9,10 +9,7 @@
  */
 
 //Ordenados por prioridad descendente.
-//TO DO: Recibir PID del Kernel y no usar el hardcodeado
-//TO DO: Implementar funcionamiento de los programas con archivos (actualmente no hacen nada) y recibir respuestas del kernel (receive)
-//TO DO: Devolver termination status al kernel (Segun si se finishea el proceso o se mata la consola)
-//TO DO: Desconectar consola
+//TO DO recibir respuestas del kernel (receive)
 //TO DO: Ver si podemos repetir menos logica con las funciones que devuelven TID e Indice de una lista.
 #include "consola.h"
 #include <stdio.h>
@@ -50,14 +47,10 @@ typedef struct t_process {
 
 void programThread_sig_handler(int signo)
 {
+    write(1, "si2g", 4);
+
     write(1, "sig", 4);
-
-	  if (signo == SIGUSR1){
-	    write(1, "exi", 4);
-	    pthread_exit(0);
-	  }
-
-	    write(1, "sig", 4);
+	pthread_exit(0);
 
 
 
@@ -204,9 +197,11 @@ void endProgram(int pid){
 
 	t_process *threadToKill = getThreadfromPid(pid);
 	int indexOfRemovedThread= getIndexFromTid(threadToKill->threadID);
+	ipc_client_sendFinishProgram(threadToKill->kernelSocket, threadToKill->processId);
+	close(threadToKill->kernelSocket);
 	int result = pthread_kill(threadToKill, SIGUSR1);
 	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n", threadToKill->processId, threadToKill->kernelSocket, threadToKill->threadID);
-	ipc_client_sendFinishProgram(threadToKill->kernelSocket, threadToKill->processId);
+
 
 	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
 	 	        printf("\ncan't catch SIGUSR1\n");
@@ -226,30 +221,9 @@ void endProgram(int pid){
 
 
 void disconnectConsole(){
-
-	int listSize = list_size(processList);
-	int i;
-	t_process * aux = NULL;
-	int errorCode=0;
-
-	printf("\nDisconnecting Console\n");
-	for(i=0; i < listSize; i++){
-
-		aux = list_get(processList, i);
-		printf("Aborting Thread: %u PID: %u", aux->threadID, aux->processId);
-		ipc_client_sendFinishProgram(aux->kernelSocket,aux->processId);
-		errorCode = pthread_kill(aux->threadID, SIGUSR1);
-		if (errorCode == 0){
-			printf("Thread Successfully Aborted");
-		}else{
-			printf("Thread Not Aborted Correctly. Error code: %d", errorCode);
-		}
-		list_remove(processList, i);
-
-	}
-
-
-
+	printf("\n\n *** DISCONNECTING CONSOLE ***\n\n");
+	sleep(5);
+	abort();
 }
 
 
@@ -342,8 +316,9 @@ void connectToKernel(char * program){
 	   	while(1){
 
 	   		printf("Hi! I'm thread %u\n",aux->threadID);
-	   		sleep(5);
-	   		if(iterations == 5){
+
+	   		sleep(20);
+	   		if(iterations == 10){
 	   			printf("Finishing %u\n",aux->threadID);
 
 	   			list_remove(processList, newThreadIndex);
