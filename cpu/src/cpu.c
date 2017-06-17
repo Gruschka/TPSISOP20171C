@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <ipc/ipc.h>
+#include <pcb/pcb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <netdb.h>
@@ -34,6 +35,8 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[_MEMORY].server = 0;
 	CPU->connections[_MEMORY].socketFileDescriptor = 0;
 	CPU->connections[_MEMORY].status = DISCONNECTED;
+
+
 	CPU->assignedPCB = 0;
 	CPU->currentInstruction = 0;
 	CPU->instructionPointer = 0;
@@ -101,6 +104,8 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 //test
 
 int main() {
+	pcb_createDummy(1,2,3,4);
+
 	char *serverIp = "172.20.10.5";
 	int portno = 5000;
 	int sockfd, n;
