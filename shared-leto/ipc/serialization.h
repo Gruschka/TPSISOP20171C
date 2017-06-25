@@ -7,6 +7,7 @@
 
 #ifndef SERIALIZATION_H_
 #define SERIALIZATION_H_
+
 #include <stdint.h>
 
 typedef struct header {
@@ -18,6 +19,9 @@ typedef enum {
 	HANDSHAKE_RESPONSE,
 	PROGRAM_START,
 	PROGRAM_START_RESPONSE,
+	PROGRAM_FINISH,
+	MEMORY_NEW_PAGE,
+	MEMORY_NEW_PAGE_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -47,8 +51,23 @@ typedef struct program_start {
 
 typedef struct program_start_response {
 	ipc_header header;
-	int pid;
+	uint32_t pid;
 } __attribute__((packed)) ipc_struct_program_start_response;
+
+typedef struct program_finish {
+	ipc_header header;
+	uint32_t pid;
+} __attribute__((packed)) ipc_struct_program_finish;
+
+typedef struct memory_new_page {
+	ipc_header header;
+	uint32_t pid;
+} __attribute__((packed)) ipc_struct_memory_new_page;
+
+typedef struct memory_new_page_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_new_page_response;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 
