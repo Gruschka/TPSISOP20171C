@@ -380,7 +380,23 @@ void mem_deinitProcess(int32_t processID) {
 void dump_cache() {
 	char *logPath = "./src/cache_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
-	// TODO: dumpear cache
+	int i;
+	for (i = 0; i < k_numberOfEntriesInCache; i++) {
+		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+		char *buffer = malloc(k_frameSize);
+		memcpy(buffer, entry->pageContentPointer, k_frameSize);
+
+		int j;
+		for (j = 0; j < k_frameSize; j++) {
+			if (buffer[j] == '\0') {
+				buffer[j] = '-';
+			}
+		}
+
+		log_info(log, "(Entrada de cache n° %d) processID: %d; processPageNumber: %d; lruCounter: %d; pageContent: %s", i, entry->processID, entry->processPageNumber, entry->lruCounter, buffer);
+
+		free(buffer);
+	}
 }
 
 //////// Fin de dumps
