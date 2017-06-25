@@ -17,15 +17,17 @@
 
 #include "memory.h"
 #include "scheduling.h"
+#include "shared_variables.h"
 #include <commons/config.h>
 #include <commons/log.h>
 
-//"""Private"""
+//Private
 static t_config *__config;
 
 //Globals
 t_kernel_config *configuration;
 t_log *logger;
+t_list *sharedVariables;
 
 pthread_t serverThread;
 pthread_t schedulerThread;
@@ -43,8 +45,30 @@ void testMemory() {
 	void *fourthBlock = memory_addBlock(page, 43);
 
 	log_debug(logger, "fourthBlock: %p", fourthBlock);
-
 	memory_dumpPage(page);
+
+	shared_variable *a = createSharedVariable("A");
+	shared_variable *b = createSharedVariable("B");
+	shared_variable *c = createSharedVariable("C");
+	list_add(sharedVariables, a);
+	list_add(sharedVariables, b);
+	list_add(sharedVariables, c);
+
+	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
+				getSharedVariableValue("A"),
+				getSharedVariableValue("B"),
+				getSharedVariableValue("C"),
+				getSharedVariableValue("D"));
+
+	setSharedVariableValue("A", 1);
+	setSharedVariableValue("B", 2);
+	setSharedVariableValue("C", 3);
+
+	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
+				getSharedVariableValue("A"),
+				getSharedVariableValue("B"),
+				getSharedVariableValue("C"),
+				getSharedVariableValue("D"));
 }
 
 int main(int argc, char **argv) {
@@ -72,6 +96,7 @@ int main(int argc, char **argv) {
 	newQueue = newQueue_create();
 	readyQueue = readyQueue_create();
 	execList = execList_create();
+	sharedVariables = list_create();
 
 	testMemory();
 
@@ -146,6 +171,11 @@ void consolesServerSocket_handleNewConnection(int fd) {
 
 void consolesServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
+
+	// Si aca ya están finalizados no hago nada
+
+	// busco todos los pcbs para esa consola
+	// los finalizo y les pongo el exit code de desconexión
 }
 
 void *scheduler_mainFunction(void)
