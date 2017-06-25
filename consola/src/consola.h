@@ -21,6 +21,7 @@ void requestFilePath(char *filePath);
 void connectToKernel(char *);
 int requestPid();
 void dump_buffer(void *buffer, int size);
+int threadsInExecution();
 
 //void console_print_programs(t_list * head);
 #endif /* CONSOLA_H_ */

@@ -43,6 +43,7 @@ typedef struct t_process {
 	pthread_t threadID;
 	uint32_t processId;
 	int kernelSocket;
+	struct t_process * processMemoryAddress;
 } t_process;
 
 void programThread_sig_handler(int signo)
@@ -195,7 +196,24 @@ int getIndexFromTid(pthread_t tid){
 }
 void endProgram(int pid){
 
+	if(noThreadsInExecution() == 1){
+		printf("No threads currently in execution - End Program not available\n");
+		return; //Si no hay hilos en ejecucion corta
+	}
+
+
 	t_process *threadToKill = getThreadfromPid(pid);
+
+	if(getThreadfromPid(pid) == NULL){
+				printf("No thread with such pid could be found - End Program aborted\n");
+				return; //Si el pid ingresado no existe dentro de la lista de procesos
+	}
+
+	printf("La direccion del hilo a matar es: [%p]\n", &threadToKill);
+	printf("La direccion del HILO A MATAR SEGUN SU STRUCT: [%p]\n", threadToKill->processMemoryAddress);
+
+
+
 	int indexOfRemovedThread= getIndexFromTid(threadToKill->threadID);
 	ipc_client_sendFinishProgram(threadToKill->kernelSocket, threadToKill->processId);
 	close(threadToKill->kernelSocket);
@@ -216,6 +234,7 @@ void endProgram(int pid){
 	printf("\n\nLLEGO CHETITO ACA\n\n");
 
 	list_remove(processList, indexOfRemovedThread);
+	free(threadToKill->processMemoryAddress);
 
 }
 
@@ -264,8 +283,16 @@ void connectToKernel(char * program){
 		struct hostent *server;
 		int programLength;
 		t_process *aux = malloc(sizeof(t_process)); // Para la lista de PIDs y Thread Ids
+
+		printf("La direccion del nuevo hilo es (AUX): [%p]\n", aux);
+
+
 		pthread_t self = pthread_self();
+
+
 		aux->threadID = self;
+		aux->processMemoryAddress = aux;
+		printf("La direccion del nuevo hilo es (STRUCT): [%p]\n", aux->processMemoryAddress);
 
 		printf("EL programa es: %s", program);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
@@ -313,6 +340,7 @@ void connectToKernel(char * program){
 	   	list_add(processList , aux);
 	   	int iterations = 0;
 	   	int newThreadIndex = getIndexFromTid(aux->threadID);
+
 	   	while(1){
 
 	   		printf("Hi! I'm thread %u\n",aux->threadID);
@@ -400,4 +428,18 @@ void showCurrentThreads(){
 		aux = list_get(processList, i);
 		printf("[%d] - TID: %u  PID: %u\n",i, aux->threadID, aux->processId);
 	}
+}
+
+//Devuelve 0 si no hay elementos
+int noThreadsInExecution(){
+
+	int listSize = list_size(processList);
+
+	if(listSize == 0) return 1;
+
+	return 0;
+}
+
+int isValidPid(int aPid){
+
 }
