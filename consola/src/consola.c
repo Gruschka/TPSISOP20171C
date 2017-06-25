@@ -206,15 +206,16 @@ void endProgram(int pid){
 				return; //Si el pid ingresado no existe dentro de la lista de procesos
 	}
 
-	printf("La direccion del hilo a matar es: [%p]\n", &threadToKill);
-	printf("La direccion del HILO A MATAR SEGUN SU STRUCT: [%p]\n", threadToKill->processMemoryAddress);
-
-
-
 	int indexOfRemovedThread= getIndexFromTid(threadToKill->threadID);
 	ipc_client_sendFinishProgram(threadToKill->kernelSocket, threadToKill->processId);
+
+	//Cierra el socket
 	close(threadToKill->kernelSocket);
+
+	//Mata el hilo
 	int result = pthread_kill(threadToKill, SIGUSR1);
+
+
 	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n", threadToKill->processId, threadToKill->kernelSocket, threadToKill->threadID);
 
 
@@ -377,7 +378,7 @@ int parser_getAnSISOPFromFile(char *name, void **buffer){
 	//Read file contents into buffer
 	fread(*buffer, fileLen, 1, file);
 	fclose(file);
-
+	free(*buffer);
 	//Do whatever with buffer
 	return fileLen;
 }
