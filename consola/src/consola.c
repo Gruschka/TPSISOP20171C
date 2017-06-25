@@ -9,7 +9,8 @@
  */
 
 //Ordenados por prioridad descendente.
-//TO DO recibir respuestas del kernel (receive)
+//TO DO: recibir respuestas del kernel (receive)
+//TO DO: Enviar mensaje frente a desconectar consola?
 //TO DO: Ver si podemos repetir menos logica con las funciones que devuelven TID e Indice de una lista.
 #include "consola.h"
 #include <stdio.h>
