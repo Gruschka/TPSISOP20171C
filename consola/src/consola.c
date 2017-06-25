@@ -146,7 +146,6 @@ void startProgram(char * programPath) {
 
 
 }
-
 int requestPid(){
 	int pid;
 	printf("\nEnter pid:\n");
@@ -154,8 +153,6 @@ int requestPid(){
 	return pid;
 
 }
-
-
 t_process *getThreadfromPid(int aPid){
 
 	t_process * aux = NULL;
@@ -174,7 +171,6 @@ t_process *getThreadfromPid(int aPid){
 
 	return NULL;
 }
-
 int getIndexFromTid(pthread_t tid){
 
 	t_process * aux = NULL;
@@ -238,21 +234,15 @@ void endProgram(int pid){
 	free(threadToKill->processMemoryAddress);
 
 }
-
-
 void disconnectConsole(){
 	printf("\n\n *** DISCONNECTING CONSOLE ***\n\n");
 	sleep(5);
 	abort();
 }
-
-
 void clearConsole(){
 	system("clear");
 	return;
 }
-
-
 void requestFilePath(char *filePath){
 
 	printf("\nPlease provide file path\n");
@@ -261,7 +251,6 @@ void requestFilePath(char *filePath){
 	//puts(filePath);
 
 }
-
 void *executeProgram(void *arg){
 
 
@@ -273,27 +262,25 @@ void *executeProgram(void *arg){
 
 
 }
-
 int parser_getAnSISOPFromFile(char *name, void **buffer);
-
 void connectToKernel(char * program){
 
-		int pid; //TO DO: Este valor debe tomarlo por parte del KERNEL
+		//Declare variables used in function
 		int sockfd, n;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
 		int programLength;
-		t_process *aux = malloc(sizeof(t_process)); // Para la lista de PIDs y Thread Ids
 
-		printf("La direccion del nuevo hilo es (AUX): [%p]\n", aux);
+		//Create a pointer to t_process in order to add it to the list of threads in execution
+		t_process *aux = malloc(sizeof(t_process));
 
-
+		//Saves a reference to the thread
 		pthread_t self = pthread_self();
 
-
+		//Populate the information of the aux pointer
 		aux->threadID = self;
-		aux->processMemoryAddress = aux;
-		printf("La direccion del nuevo hilo es (STRUCT): [%p]\n", aux->processMemoryAddress);
+		aux->processMemoryAddress = aux; //Saves a reference to the memory direction of aux so it can be freed from endProgram
+
 
 		printf("EL programa es: %s", program);
 		printf("\nServer Ip: %s Port No: %d", serverIp, portno);
@@ -327,7 +314,6 @@ void connectToKernel(char * program){
 	   // Now sends the program and is read by server
 
 	   void *buffer = 0;
-	   //Comennto parte de archivo para poder trabajar sin archivos y probar la lista de t_process
 	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
 	   log_debug(logger, "Read file. %s. Size: %d", program, programLength);
@@ -342,6 +328,7 @@ void connectToKernel(char * program){
 	   	int iterations = 0;
 	   	int newThreadIndex = getIndexFromTid(aux->threadID);
 
+	   	//TODO: Receive actual information from kernel and print it in console
 	   	while(1){
 
 	   		printf("Hi! I'm thread %u\n",aux->threadID);
@@ -358,10 +345,9 @@ void connectToKernel(char * program){
 
 	   	}
 
+	   free(aux);
 	   return;
 }
-
-
 
 //File Manager
 int parser_getAnSISOPFromFile(char *name, void **buffer){
@@ -441,6 +427,4 @@ int noThreadsInExecution(){
 	return 0;
 }
 
-int isValidPid(int aPid){
 
-}
