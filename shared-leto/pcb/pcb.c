@@ -35,6 +35,7 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	dummyStack0->returnVariable.page = 2;
 	dummyStack0->returnVariable.size = 3;
 	dummyStack0->variables = list_create();
+	dummyStack0->arguments = list_create();
 	//create a & b
 	t_stackVariable *variableA = malloc(sizeof(t_stackVariable));
 	variableA->id = 'a';
@@ -46,9 +47,15 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	variableB->offset = 3;
 	variableB->page = 4;
 	variableB->size = 4 + sizeof(uint32_t);
+	t_stackVariable *argumentA = malloc(sizeof(t_stackVariable));
+	argumentA->id = 'd';
+	argumentA->offset = 1;
+	argumentA->page = 2;
+	argumentA->size = 8 + sizeof(uint32_t);
 	//add a &B
 	pcb_addStackIndexVariable(dummyReturn,dummyStack0,variableA,VARIABLE);
 	pcb_addStackIndexVariable(dummyReturn,dummyStack0,variableB,VARIABLE);
+	pcb_addStackIndexVariable(dummyReturn,dummyStack0,argumentA,ARGUMENT);
 
 	//list_add(dummyStack0->variables,variableA);
 	pcb_addStackIndexRecord(dummyReturn,dummyStack0);
@@ -90,6 +97,9 @@ void *pcb_serializePCB(t_PCB *PCB){
 
 	void *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+offset,&(PCB->variableSize),sizeof(t_PCBVariableSize));
+	offset += sizeof(t_PCBVariableSize);
 
 	memcpy(buffer+offset,&(PCB->pid),sizeof(uint32_t));
 	offset += sizeof(uint32_t);
@@ -149,9 +159,6 @@ void *pcb_serializePCB(t_PCB *PCB){
 		}
 	}
 
-	memcpy(buffer+offset,&(PCB->variableSize),sizeof(t_PCBVariableSize));
-	offset += sizeof(t_PCBVariableSize);
-
 	memcpy(buffer+offset,&(PCB->filesTable),sizeof(void *));
 	offset += sizeof(void *);
 
@@ -159,10 +166,13 @@ void *pcb_serializePCB(t_PCB *PCB){
 
 }
 
-t_PCB *pcb_deSerializePCB(void *serializedPCB, int totalSize, int stackIndexRecordCount, int stackIndexVariableCount, int stackIndexArgumentCount){
+t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int stackIndexVariableCount, int stackIndexArgumentCount){
 	t_PCB *deSerializedPCB = malloc(sizeof(t_PCB));
 	void *buffer;
 	int offset = 0;
+
+	memcpy(&(deSerializedPCB->variableSize),serializedPCB+offset,sizeof(t_PCBVariableSize));
+	offset += sizeof(t_PCBVariableSize);
 
 	memcpy(&(deSerializedPCB->pid),serializedPCB+offset,sizeof(uint32_t));
 	offset += sizeof(uint32_t);
@@ -181,8 +191,8 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, int totalSize, int stackIndexReco
 	int stackIndexArgumentIterator = 0;
 
 	if(stackIndexRecordCount != 0){
+		deSerializedPCB->stackIndex = list_create();
 		while(stackIndexRecordIterator < stackIndexRecordCount){
-			deSerializedPCB->stackIndex = list_create();
 			t_stackIndexRecord *stackIndexRecord = malloc(sizeof(t_stackIndexRecord));
 			if(stackIndexArgumentCount !=0){
 				stackIndexRecord->arguments = list_create();
@@ -225,18 +235,12 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, int totalSize, int stackIndexReco
 					stackIndexVariableIterator++;
 				}
 			}
-			int test = list_size(stackIndexRecord->variables);
-			t_stackVariable *a = list_get(stackIndexRecord->variables,0);
-			t_stackVariable *b = list_get(stackIndexRecord->variables,1);
+
 
 			list_add(deSerializedPCB->stackIndex,stackIndexRecord);
 			stackIndexRecordIterator++;
 		}
 	}
-
-	memcpy(&(deSerializedPCB->variableSize),serializedPCB+offset,sizeof(t_PCBVariableSize));
-	offset += sizeof(t_PCBVariableSize);
-
 
 	return deSerializedPCB;
 }
@@ -251,13 +255,13 @@ void pcb_addStackIndexRecord(t_PCB *PCB, t_stackIndexRecord *record){
 void pcb_addStackIndexVariable(t_PCB *PCB, t_stackIndexRecord *stackIndex, t_stackVariable *variable, t_variableAdd type){
 	switch (type) {
 		case VARIABLE:
-			if (variable != NULL && stackIndex != NULL) {
+			if (variable != NULL && stackIndex->variables != NULL) {
 				list_add(stackIndex->variables,variable);
 				PCB->variableSize.stackVariableCount++;
 			}
 			break;
 		case ARGUMENT:
-			if (variable != NULL && stackIndex != NULL) {
+			if (variable != NULL && stackIndex->arguments != NULL) {
 				list_add(stackIndex->arguments,variable);
 				PCB->variableSize.stackArgumentCount++;
 			}
