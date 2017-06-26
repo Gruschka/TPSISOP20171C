@@ -244,17 +244,17 @@ void executeNewProgram(t_PCB *pcb) {
 
 void *configurationWatcherThread_mainFunction() {
 	int fd = inotify_init();
-	int length, i = 0;
+	int length, i;
 	char buffer[EVENT_BUF_LEN];
 
 	if (fd == -1) {
 		log_error(logger, "Error while initializing inotify");
-		pthread_exit(-1);
+		pthread_exit(NULL);
 	}
 
-	if (inotify_add_watch(fd, __config->path, IN_ALL_EVENTS) == -1) {
+	if (inotify_add_watch(fd, __config->path, IN_MODIFY) == -1) {
 		log_error(logger, "Error adding inotify watch");
-		pthread_exit(-1);
+		pthread_exit(NULL);
 	}
 
 	log_debug(logger,
@@ -264,17 +264,19 @@ void *configurationWatcherThread_mainFunction() {
 	while (1) {
 		length = read(fd, buffer, EVENT_BUF_LEN);
 
-		if (length < 0) {
-			perror("read");
+		if (length <= 0) {
+			log_error(logger, "[configuration-watcher] error reading inotify event");
 		}
 
+		i = 0;
 		while (i < length) {
 			struct inotify_event *event = (struct inotify_event *) &buffer[i];
-			log_debug(logger,"[configuration-watcher] new event: %d", event->mask);
-			if (event->len && (event->mask & IN_CLOSE)) {
+			if (event->mask & IN_MODIFY) {
 				log_debug(logger,
 						"[configuration-watcher] config file changed. reloading config");
+				fetchConfiguration();
 			}
+
 			i += EVENT_SIZE+ event->len;
 		}
 	}
