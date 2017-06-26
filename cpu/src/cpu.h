@@ -62,5 +62,6 @@ extern t_CPU myCPU;
 
 uint32_t cpu_start(t_CPU *CPU);
 uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType);
+uint32_t cpu_getPCB(t_CPU *CPU, t_PCB PCB);
 
 #endif /* CPU_H_ */

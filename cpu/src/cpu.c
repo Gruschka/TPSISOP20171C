@@ -102,41 +102,54 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 //test
 
 int main() {
-	pcb_createDummy(1,2,3,4);
+	char *logfile = tmpnam(NULL);
+	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
 
-	char *serverIp = "172.20.10.5";
+
+	char *serverIp = "192.168.0.27";
 	int portno = 5000;
 	int sockfd, n;
-			struct sockaddr_in serv_addr;
-			struct hostent *server;
-			int programLength;
+	struct sockaddr_in serv_addr;
+	struct hostent *server;
+	int programLength;
 
-			printf("\nServer Ip: %s Port No: %d", serverIp, portno);
-			printf("\nConnecting to Kernel\n");
 
-			/* Create a socket point */
-			sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	printf("\nServer Ip: %s Port No: %d", serverIp, portno);
+	printf("\nConnecting to Kernel\n");
 
-		   if (sockfd < 0) {
-		      perror("ERROR opening socket");
-		      exit(1);
-		   }
+	/* Create a socket point */
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-		   server = gethostbyname(serverIp);
-		   bzero((char *) &serv_addr, sizeof(serv_addr));
-		   serv_addr.sin_family = AF_INET;
-		   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-		   serv_addr.sin_port = htons(portno);
+   if (sockfd < 0) {
+	  perror("ERROR opening socket");
+	  exit(1);
+   }
 
-		   /* Now connect to the server */
-		   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-		      perror("ERROR connecting");
-		      exit(1);
-		   }
+   server = gethostbyname(serverIp);
+   bzero((char *) &serv_addr, sizeof(serv_addr));
+   serv_addr.sin_family = AF_INET;
+   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+   serv_addr.sin_port = htons(portno);
 
-		   // Send handshake and wait for response
-		   ipc_client_sendHandshake(CPU, sockfd);
-		   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
+   /* Now connect to the server */
+/*   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+	  perror("ERROR connecting");
+	  exit(1);
+   }*/
+
+   // Send handshake and wait for response
+/*   ipc_client_sendHandshake(CPU, sockfd);
+   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);*/
+
+   t_PCB *dummyPCB = pcb_createDummy(1,2,3,4);
+
+   void *serializedPCB;
+   serializedPCB = pcb_serializePCB(dummyPCB);
+
+   dummyPCB = pcb_deSerializePCB(serializedPCB,61,1,2,0);
+
+   pcb_dump(dummyPCB);
+
 
 	return EXIT_SUCCESS;
 }
