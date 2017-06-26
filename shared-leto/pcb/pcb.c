@@ -318,3 +318,22 @@ void pcb_dump(t_PCB *PCB){
 
 
 }
+
+uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize){
+	uint32_t totalSize = 0;
+
+	// variable size
+	totalSize += sizeof(t_PCBVariableSize);
+
+	// pid, pc, sp, ec, filesTable
+	totalSize += sizeof(uint32_t) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(void *);
+
+	// fixed data for each stack index record
+	totalSize += variableSize->stackIndexRecordCount * (sizeof(uint32_t) + sizeof(t_memoryDirection));
+
+	// variables and arguments
+	totalSize += (variableSize->stackVariableCount + variableSize->stackArgumentCount) * sizeof(t_stackVariable);
+
+	return totalSize;
+
+}

@@ -60,5 +60,6 @@ uint32_t pcb_getPCBSize(t_PCB *PCB);
 void *pcb_serializePCB(t_PCB *PCB);
 t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int stackIndexVariableCount, int stackIndexArgumentCount);
 void pcb_dump(t_PCB *PCB);
+uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize);
 
 #endif /* PCB_H_ */
