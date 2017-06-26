@@ -171,15 +171,41 @@ int assignPageToProcess(int32_t processID, int32_t processPageNumber) {
 int numberOfPagesOwnedByProcess(int32_t processID) {
 	int numberOfPagesOwned = 0;
 
-	int i = 0;
+	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
-			mem_page_entry *entry = getPageEntryPointerForIndex(i);
-			if (entry->processID == processID) {
-				numberOfPagesOwned++;
-			}
+		mem_page_entry *entry = getPageEntryPointerForIndex(i);
+		if (entry->processID == processID) {
+			numberOfPagesOwned++;
 		}
+	}
 
 	return numberOfPagesOwned;
+}
+
+int *activeProcessesIDs() {
+	int *processesIDsPointers = malloc(sizeof(int));
+	*processesIDsPointers = -1;
+
+	int i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryPointerForIndex(i);
+		if (entry->processID != -1) {
+			int j;
+			for (j = 0; *(processesIDsPointers + j) != -1; j++) {
+				int *processIDPointer = processesIDsPointers + j;
+				if (*processIDPointer == entry->processID) break;
+			}
+
+			int *processIDPointer = processesIDsPointers + j;
+			if (*processIDPointer == -1) {
+				processesIDsPointers = realloc(processesIDsPointers, (j + 1 + 1) * sizeof(int));
+				*(processesIDsPointers + j) = entry->processID;
+				*(processesIDsPointers + j + 1) = -1;
+			}
+		}
+	}
+
+	return processesIDsPointers;
 }
 
 //////// Fin de código de memoria física
@@ -352,7 +378,7 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 void mem_deinitProcess(int32_t processID) {
 	// Primero destruimos las entradas de las páginas
 	// de la memoria física
-	int i = 0;
+	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
 		if (entry->processID == processID) {
@@ -413,22 +439,36 @@ void dump_pageEntriesAndActiveProcesses() {
 	}
 
 	log_info(log, "Listado de procesos activos (processID):");
+	int *processesIDs = activeProcessesIDs();
+	for (i = 0; *(processesIDs + i) != -1; i++) {
+		log_info(log, "%d", *(processesIDs + i));
+	}
+
+	log_destroy(log);
+}
+
+void dump_pagesContentForProcess(u_int32_t processID) {
+	char *logPath = "./src/process_memory_dump.txt";
+	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+
+	log_info(log, "Contenido de las páginas asignadas para proceso (processID: %d)", processID);
+	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
-		mem_page_entry *iEntry = getPageEntryPointerForIndex(i);
-		if (iEntry->processID != -1) {
-			// Check if the picked element is already printed
+		mem_page_entry *entry = getPageEntryPointerForIndex(i);
+		if (entry->processID == processID) {
+			void *frame = getFramePointerForPageIndex(i);
+			char *buffer = malloc(k_frameSize);
+			memcpy(buffer, frame, k_frameSize);
+
 			int j;
-			for (j = 0; j < i; j++) {
-				mem_page_entry *jEntry = getPageEntryPointerForIndex(j);
-				if (iEntry->processID == jEntry->processID) {
-					break;
+			for (j = 0; j < k_frameSize; j++) {
+				if (buffer[j] == '\0') {
+					buffer[j] = '-';
 				}
 			}
 
-			// If not printed earlier, then print it
-			if (i == j) {
-				log_info(log, "%d", iEntry->processID);
-			}
+			log_info(log, "(Virtual Page n° %d) pageContent: %s", entry->processPageNumber, buffer);
+			free(buffer);
 		}
 	}
 
@@ -436,7 +476,11 @@ void dump_pageEntriesAndActiveProcesses() {
 }
 
 void dump_assignedPagesContent() {
-	printf("TODO: dumpear contenido de la memoria para todos los procesos.\n\n");
+	int *processesIDs = activeProcessesIDs();
+	int i;
+	for (i = 0; *(processesIDs + i) != -1; i++) {
+		dump_pagesContentForProcess(*(processesIDs + i));
+	}
 }
 
 //////// Fin de dumps
