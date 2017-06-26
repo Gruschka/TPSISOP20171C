@@ -38,6 +38,7 @@ void consolesServerSocket_handleDisconnection(int fd);
 
 void *scheduler_mainFunction(void);
 void *dispatcher_mainFunction(void);
+void *configurationWatcherThread_mainFunction();
 
 void executeNewProgram(t_PCB *pcb);
 

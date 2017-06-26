@@ -380,6 +380,7 @@ void mem_deinitProcess(int32_t processID) {
 void dump_cache() {
 	char *logPath = "./src/cache_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
@@ -397,6 +398,45 @@ void dump_cache() {
 
 		free(buffer);
 	}
+
+	log_destroy(log);
+}
+
+void dump_pageEntriesAndActiveProcesses() {
+	char *logPath = "./src/pages_table_dump.txt";
+	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+
+	int i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryPointerForIndex(i);
+		log_info(log, "(Entrada de tabla de páginas n° %d) processID: %d; processPageNumber: %d", i, entry->processID, entry->processPageNumber);
+	}
+
+	log_info(log, "Listado de procesos activos (processID):");
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *iEntry = getPageEntryPointerForIndex(i);
+		if (iEntry->processID != -1) {
+			// Check if the picked element is already printed
+			int j;
+			for (j = 0; j < i; j++) {
+				mem_page_entry *jEntry = getPageEntryPointerForIndex(j);
+				if (iEntry->processID == jEntry->processID) {
+					break;
+				}
+			}
+
+			// If not printed earlier, then print it
+			if (i == j) {
+				log_info(log, "%d", iEntry->processID);
+			}
+		}
+	}
+
+	log_destroy(log);
+}
+
+void dump_assignedPagesContent() {
+	printf("TODO: dumpear contenido de la memoria para todos los procesos.\n\n");
 }
 
 //////// Fin de dumps
@@ -419,13 +459,14 @@ void menu_configurePhysicalMemoryDelay() {
 void menu_dump() {
 	int optionIndex = 0;
 	do {
-		printf("¿Qué desea dumpear? (0 para cancelar): \n1. Memoria cache\n2. Tabla de páginas y listado de procesos activos\n3. Contenido de la memoria\n> ");
+		printf("¿Qué desea dumpear? (0 para cancelar): \n1. Memoria cache\n2. Tabla de páginas y listado de procesos activos\n3. Contenido de la memoria completa\n4. Contenido de la memoria para un proceso en particular\n> ");
 		scanf("%d", &optionIndex);
 		switch (optionIndex) {
 		case 0: printf("No se dumpeó nada.\n\n"); break;
 		case 1: dump_cache(); break;
-		case 2: printf("TODO: dumpear estructuras administrativas.\n\n"); break;
-		case 3: printf("TODO: dumpear contenido de la memoria.\n\n"); break;
+		case 2: dump_pageEntriesAndActiveProcesses(); break;
+		case 3: dump_assignedPagesContent(); break;
+		case 4: printf("TODO: dumpear contenido de la memoria para un proceso en particular.\n\n"); break;
 		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
 		}
 	} while (optionIndex > 3);
@@ -452,82 +493,91 @@ void menu_size() {
 //////// Fin de consola
 
 int main(int argc, char **argv) {
-	// Configuración
-	char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
-	printf("Levantando configuración del archivo '%s'.\n", configPath);
-	t_config *config = config_create(configPath);
-	k_connectionPort = config_get_int_value(config, "PUERTO");
-	k_numberOfFrames = config_get_int_value(config, "MARCOS");
-	k_frameSize = config_get_int_value(config, "MARCO_SIZE");
-	k_numberOfEntriesInCache = config_get_int_value(config, "ENTRADAS_CACHE");
-	k_maxPagesForEachProcessInCache = config_get_int_value(config, "CACHE_X_PROC");
-	k_physicalMemoryAccessDelay = config_get_int_value(config, "RETARDO_MEMORIA");
-
-	// Physical memory initialization
-	printf("Inicializando memoria física.\n");
-	int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
-	physicalMemory = malloc(totalNumberOfBytes);
-	k_numberOfPages = floor(totalNumberOfBytes / (k_frameSize + sizeof(mem_page_entry)));
-
-	int i;
-	for (i = 0; i < k_numberOfPages; i++) {
-		mem_page_entry *entry = getPageEntryPointerForIndex(i);
-		entry->processID = -1;
-		entry->processPageNumber = -1;
+	{ // Configuración
+		char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
+		printf("Levantando configuración del archivo '%s'.\n", configPath);
+		t_config *config = config_create(configPath);
+		k_connectionPort = config_get_int_value(config, "PUERTO");
+		k_numberOfFrames = config_get_int_value(config, "MARCOS");
+		k_frameSize = config_get_int_value(config, "MARCO_SIZE");
+		k_numberOfEntriesInCache = config_get_int_value(config, "ENTRADAS_CACHE");
+		k_maxPagesForEachProcessInCache = config_get_int_value(config, "CACHE_X_PROC");
+		k_physicalMemoryAccessDelay = config_get_int_value(config, "RETARDO_MEMORIA");
+		config_destroy(config);
 	}
 
-	// Cache memory initialization
-	printf("Inicializando memoria cache.\n");
-	cache = malloc(k_numberOfEntriesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
-	for (i = 0; i < k_numberOfEntriesInCache; i++) {
-		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
-		entry->processID = -1;
-		entry->processPageNumber = -1;
-		entry->lruCounter = 0;
-		entry->pageContentPointer = (void *)entry + sizeof(mem_cached_page_entry);
+	{ // Physical memory initialization
+		printf("Inicializando memoria física.\n");
+		int totalNumberOfBytes = k_numberOfFrames * k_frameSize;
+		physicalMemory = malloc(totalNumberOfBytes);
+		k_numberOfPages = floor(totalNumberOfBytes / (k_frameSize + sizeof(mem_page_entry)));
+
+		int i;
+		for (i = 0; i < k_numberOfPages; i++) {
+			mem_page_entry *entry = getPageEntryPointerForIndex(i);
+			entry->processID = -1;
+			entry->processPageNumber = -1;
+		}
 	}
 
-//	int a = mem_initProcess(0, 10);
-//	int b = mem_initProcess(1, 10);
-//	int c = mem_initProcess(2, 10);
-//	int d = mem_initProcess(0, 1);
+	{ // Cache memory initialization
+		printf("Inicializando memoria cache.\n");
+		cache = malloc(k_numberOfEntriesInCache * (sizeof(mem_cached_page_entry) + k_frameSize));
+		int i;
+		for (i = 0; i < k_numberOfEntriesInCache; i++) {
+			mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+			entry->processID = -1;
+			entry->processPageNumber = -1;
+			entry->lruCounter = 0;
+			entry->pageContentPointer = (void *)entry + sizeof(mem_cached_page_entry);
+		}
+	}
+
+	{ // Tests
+//		int a = mem_initProcess(0, 10);
+//		int b = mem_initProcess(1, 10);
+//		int c = mem_initProcess(2, 10);
+//		int d = mem_initProcess(0, 1);
 //
-//	char *texto = "esto es una prueba capo";
-//	int a1 = mem_write(0, 0, 0, 24, texto);
-//	int a2 = mem_write(0, 9, 0, 24, texto);
-//	int a3 = mem_write(1, 2, 0, 24, texto);
-//	int a4 = mem_write(0, 10, 0, 24, texto);
+//		char *texto = "esto es una prueba capo";
+//		int a1 = mem_write(0, 0, 0, 24, texto);
+//		int a2 = mem_write(0, 9, 0, 24, texto);
+//		int a3 = mem_write(1, 2, 0, 24, texto);
+//		int a4 = mem_write(0, 10, 0, 24, texto);
 //
-//	char *meTraje1 = mem_read(0, 0, 0, 24);
-//	char *meTraje2 = mem_read(0, 9, 0, 24);
-//	char *meTraje3 = mem_read(1, 2, 0, 24);
-//	char *meTraje4 = mem_read(0, 10, 0, 24);
+//		char *meTraje1 = mem_read(0, 0, 0, 24);
+//		char *meTraje2 = mem_read(0, 9, 0, 24);
+//		char *meTraje3 = mem_read(1, 2, 0, 24);
+//		char *meTraje4 = mem_read(0, 10, 0, 24);
 //
-//	int b1 = mem_addPagesToProcess(0, 1);
-//	int b2 = mem_write(0, 10, 0, 24, texto);
-//	char *b3 = mem_read(0, 10, 0, 24);
-//	char *b4 = mem_read(0, 11, 0, 24);
+//		int b1 = mem_addPagesToProcess(0, 1);
+//		int b2 = mem_write(0, 10, 0, 24, texto);
+//		char *b3 = mem_read(0, 10, 0, 24);
+//		char *b4 = mem_read(0, 11, 0, 24);
 //
-//	mem_deinitProcess(0);
+//		mem_deinitProcess(0);
 //
-//	char *c1 = mem_read(0, 0, 0, 24);
-//	char *c2 = mem_read(1, 2, 0, 24);
+//		char *c1 = mem_read(0, 0, 0, 24);
+//		char *c2 = mem_read(1, 2, 0, 24);
+	}
 
 	printf("Todo configurado y funcionando.\n\n");
 
-	int optionIndex = 0;
-	do {
-		printf("Seleccione una opción (0 para salir): \n1. Configurar retardo\n2. dump\n3. flush\n4. size\n> ");
-		scanf("%d", &optionIndex);
-		switch (optionIndex) {
-		case 0: printf("Saliendo.\n\n"); break;
-		case 1: menu_configurePhysicalMemoryDelay(); break;
-		case 2: menu_dump(); break;
-		case 3: menu_flush(); break;
-		case 4: menu_size(); break;
-		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
-		}
-	} while (optionIndex != 0);
+	{ // Presentamos menú
+		int optionIndex = 0;
+		do {
+			printf("Seleccione una opción (0 para salir): \n1. Configurar retardo\n2. dump\n3. flush\n4. size\n> ");
+			scanf("%d", &optionIndex);
+			switch (optionIndex) {
+			case 0: printf("Saliendo.\n\n"); break;
+			case 1: menu_configurePhysicalMemoryDelay(); break;
+			case 2: menu_dump(); break;
+			case 3: menu_flush(); break;
+			case 4: menu_size(); break;
+			default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
+			}
+		} while (optionIndex != 0);
+	}
 
 	return EXIT_SUCCESS;
 }
