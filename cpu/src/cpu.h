@@ -22,6 +22,8 @@
 //#define KERNEL 0
 //#define MEMORY 1
 
+#define DUMMY_MEMORY_PAGE_SIZE 512
+
 typedef enum{
 	T_KERNEL,
 	T_MEMORY,
@@ -58,10 +60,16 @@ typedef struct CPU{
 	t_CPUStatus status;
 }t_CPU;
 
+
 extern t_CPU myCPU;
+extern void *myMemory;
 
 uint32_t cpu_start(t_CPU *CPU);
 uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType);
 uint32_t cpu_getPCB(t_CPU *CPU, t_PCB PCB);
+void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size);
+uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer);
+
+
 
 #endif /* CPU_H_ */
