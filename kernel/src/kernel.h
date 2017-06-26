@@ -26,15 +26,22 @@ typedef struct t_kernel_config {
 	//TODO: Agregar semaforos y variables compartidas
 } t_kernel_config;
 
+typedef struct t_CPU {
+	int fd;
+	bool isAvailable;
+} t_CPU;
+
 void fetchConfiguration();
 
 void *consolesServer_main(void *args);
-
 void consolesServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer);
-
 void consolesServerSocket_handleNewConnection(int fd);
-
 void consolesServerSocket_handleDisconnection(int fd);
+
+void *cpusServer_main(void *args);
+void cpusServerSocket_handleDeserializedStruct(int fd, ipc_operationIdentifier operationId, void *buffer);
+void cpusServerSocket_handleNewConnection(int fd);
+void cpusServerSocket_handleDisconnection(int fd);
 
 void *scheduler_mainFunction(void);
 void *dispatcher_mainFunction(void);

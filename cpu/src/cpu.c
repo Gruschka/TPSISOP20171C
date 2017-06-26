@@ -21,8 +21,25 @@
 #include <unistd.h>
 #include "cpu.h"
 #include <commons/log.h>
+#include <parser/metadata_program.h>
+#include "dummy_ansisop.h"
+#include <string.h>
+#include <commons/string.h>
+
+t_CPU myCPU;
+void *myMemory;
 
 t_log *logger;
+void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size){
+	void *buffer = malloc(size);
+
+	memcpy(buffer,myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,size);
+
+	return buffer;
+}
+uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer){
+	memcpy(myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,buffer,size);
+}
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = 0;
 	CPU->connections[T_KERNEL].host = "127.0.0.1";
@@ -46,6 +63,10 @@ uint32_t cpu_start(t_CPU *CPU){
 uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 	   int n;
 
+	   if(connectionType == T_MEMORY){
+		   myMemory = malloc(512*4);
+		   return 0;
+	   }
 
 	   char buffer[256];
 
@@ -99,44 +120,81 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 
 	   return 0;
 }
-//test
+
+ char* PROGRAMA =
+		"begin\n"
+		"variables a, b\n"
+		"a = 3\n"
+		"b = 5\n"
+		"a = b + 12\n"
+		"end\n"
+		"\n";
+
 
 int main() {
-	pcb_createDummy(1,2,3,4);
 
-	char *serverIp = "172.20.10.5";
-	int portno = 5000;
+	cpu_start(&myCPU);
+	char *script = strdup(PROGRAMA);
+	int programLength = string_length(script);
+	t_metadata_program *program = metadata_desde_literal(PROGRAMA);
+
+	cpu_connect(&myCPU,T_MEMORY);
+
+	cpu_writeMemoryDummy(1,0,0,programLength,script);
+
+	void *lectura = cpu_readMemoryDummy(1,0,0,programLength);
+
+	char *logfile = tmpnam(NULL);
+
+	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
+
+	char *serverIp = "10.0.1.90";
+	int portno = 5001;
 	int sockfd, n;
-			struct sockaddr_in serv_addr;
-			struct hostent *server;
-			int programLength;
+	struct sockaddr_in serv_addr;
+	struct hostent *server;
 
-			printf("\nServer Ip: %s Port No: %d", serverIp, portno);
-			printf("\nConnecting to Kernel\n");
+	printf("\nServer Ip: %s Port No: %d", serverIp, portno);
+	printf("\nConnecting to Kernel\n");
 
-			/* Create a socket point */
-			sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	 //Create a socket point
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-		   if (sockfd < 0) {
-		      perror("ERROR opening socket");
-		      exit(1);
-		   }
+   if (sockfd < 0) {
+	  perror("ERROR opening socket");
+	  exit(1);
+   }
 
-		   server = gethostbyname(serverIp);
-		   bzero((char *) &serv_addr, sizeof(serv_addr));
-		   serv_addr.sin_family = AF_INET;
-		   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-		   serv_addr.sin_port = htons(portno);
+   server = gethostbyname(serverIp);
+   bzero((char *) &serv_addr, sizeof(serv_addr));
+   serv_addr.sin_family = AF_INET;
+   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+   serv_addr.sin_port = htons(portno);
+/*
 
-		   /* Now connect to the server */
-		   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-		      perror("ERROR connecting");
-		      exit(1);
-		   }
+   // Now connect to the server
+   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+	  perror("ERROR connecting");
+	  exit(1);
+   }
 
-		   // Send handshake and wait for response
-		   ipc_client_sendHandshake(CPU, sockfd);
-		   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
+   // Send handshake and wait for response
+   ipc_client_sendHandshake(CPU, sockfd);
+   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
+
+*/
+   t_PCB *dummyPCB = pcb_createDummy(1,2,3,4);
+
+   void *serializedPCB;
+   serializedPCB = pcb_serializePCB(dummyPCB);
+
+   t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
+   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
+
+   dummyPCB = pcb_deSerializePCB(serializedPCB,variableInfo->stackIndexRecordCount,variableInfo->stackVariableCount,variableInfo->stackArgumentCount);
+
+   pcb_dump(dummyPCB);
+
 
 	return EXIT_SUCCESS;
 }
