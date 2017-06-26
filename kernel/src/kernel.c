@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/socket.h>
 #include <sys/inotify.h>
 #include <unistd.h>
 
@@ -33,8 +34,10 @@ static t_config *__config;
 t_kernel_config *configuration;
 t_log *logger;
 t_list *sharedVariables;
+t_list *cpusList; //TODO: Sincronizar acceso a esta lista
 
-pthread_t serverThread;
+pthread_t consolesServerThread;
+pthread_t cpusServerThread;
 pthread_t schedulerThread;
 pthread_t dispatcherThread;
 pthread_t configurationWatcherThread;
@@ -107,7 +110,8 @@ int main(int argc, char **argv) {
 		sem_post(&readyQueue_availableSpaces);
 	}
 
-	pthread_create(&serverThread, NULL, consolesServer_main, NULL );
+	pthread_create(&consolesServerThread, NULL, consolesServer_main, NULL );
+	pthread_create(&cpusServerThread, NULL, cpusServer_main, NULL);
 	pthread_create(&schedulerThread, NULL, (void *) scheduler_mainFunction,
 			NULL );
 	pthread_create(&dispatcherThread, NULL, (void *) dispatcher_mainFunction,
@@ -115,7 +119,7 @@ int main(int argc, char **argv) {
 	pthread_create(&configurationWatcherThread, NULL,
 			(void*) configurationWatcherThread_mainFunction, NULL );
 
-	pthread_join(serverThread, NULL );
+	pthread_join(consolesServerThread, NULL );
 	pthread_join(schedulerThread, NULL );
 	pthread_join(dispatcherThread, NULL );
 
@@ -127,6 +131,14 @@ void *consolesServer_main(void *args) {
 	ipc_createServer("5000", consolesServerSocket_handleNewConnection,
 			consolesServerSocket_handleDisconnection,
 			consolesServerSocket_handleDeserializedStruct);
+	return EXIT_SUCCESS;
+}
+
+void *cpusServer_main(void *args) {
+	//TODO: Pasarle el puerto por archivo de config
+	ipc_createServer("5001", cpusServerSocket_handleNewConnection,
+			cpusServerSocket_handleDisconnection,
+			cpusServerSocket_handleDeserializedStruct);
 	return EXIT_SUCCESS;
 }
 
@@ -184,6 +196,19 @@ void consolesServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 }
 
+t_CPU *getAvailableCPU() {
+	int i;
+	t_CPU *cpu = NULL;
+
+	for (i = 0; i < list_size(cpusList); i++) {
+		cpu = list_get(cpusList, i);
+	}
+
+	cpu->isAvailable = false;
+
+	return cpu;
+}
+
 void consolesServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 
@@ -192,6 +217,63 @@ void consolesServerSocket_handleDisconnection(int fd) {
 	// busco todos los pcbs para esa consola
 	// los finalizo y les pongo el exit code de desconexión
 }
+
+///////////////////////////// CPUs SERVER /////////////////////////////////
+void cpusServerSocket_handleDeserializedStruct(int fd,
+		ipc_operationIdentifier operationId, void *buffer) {
+	switch (operationId) {
+	case HANDSHAKE: {
+		ipc_struct_handshake *handshake = buffer;
+		log_info(logger, "Handshake received. Process identifier: %s",
+				processName(handshake->processIdentifier));
+		ipc_server_sendHandshakeResponse(fd, 1);
+		break;
+	}
+	case PROGRAM_START: {
+		ipc_struct_program_start *programStart = buffer;
+		char *codeString = malloc(
+				sizeof(char) * (programStart->codeLength + 1));
+		memcpy(codeString, programStart->code, programStart->codeLength);
+		codeString[programStart->codeLength] = '\0';
+		log_info(logger, "Program received. Code length: %d. Code: %s",
+				programStart->codeLength, codeString);
+		t_PCB *newProgram = malloc(sizeof(t_PCB));
+		newProgram->pid = ++lastPID;
+		ipc_sendStartProgramResponse(fd, newProgram->pid);
+		executeNewProgram(newProgram);
+		break;
+	}
+	case PROGRAM_FINISH: {
+		log_info(logger, "New program finish. fd: %d", fd);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void cpusServerSocket_handleNewConnection(int fd) {
+	log_info(logger, "New connection. fd: %d", fd);
+
+	t_CPU *cpu = malloc(sizeof(t_CPU));
+
+	cpu->fd = fd;
+	cpu->isAvailable = true;
+
+	list_add(cpusList, cpu);
+}
+
+void cpusServerSocket_handleDisconnection(int fd) {
+	log_info(logger, "New disconnection. fd: %d", fd);
+
+	// Si aca ya están finalizados no hago nada
+
+	// busco todos los pcbs para esa consola
+	// los finalizo y les pongo el exit code de desconexión
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
 
 void *scheduler_mainFunction(void) {
 	while (1) {
@@ -222,9 +304,9 @@ void *dispatcher_mainFunction(void) {
 		pthread_mutex_lock(&execList_mutex);
 		pthread_mutex_lock(&readyQueue_mutex);
 		t_PCB *program = readyQueue_popProcess();
-//			t_CPU *cpu = queue_pop(cpus libres);
-//			cpu->program = program;
-		//TODO: pasarle el pcb al cpu
+		void *pcbBuffer = pcb_serializePCB(program);
+		t_CPU *availableCPU = getAvailableCPU();
+		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
 		log_debug(logger, "[dispatcher] new process <PID:%d> in exec",
 				program->pid);
 		pthread_mutex_unlock(&readyQueue_mutex);
