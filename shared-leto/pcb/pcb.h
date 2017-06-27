@@ -49,6 +49,7 @@ typedef struct t_PCB {
 	int pc; // Program Counter
 	int sp;	// Stack Pointer
 	int ec;	// Exit Code
+	uint32_t codePages;
 	t_list *stackIndex;
 	void *filesTable; // Puntero a la tabla de archivos del proceso
 } __attribute__((packed)) t_PCB;
@@ -58,7 +59,7 @@ void pcb_addStackIndexRecord(t_PCB *PCB, t_stackIndexRecord *record);
 void pcb_addStackIndexVariable(t_PCB *PCB, t_stackIndexRecord *stackIndex, t_stackVariable *variable, t_variableAdd type);
 uint32_t pcb_getPCBSize(t_PCB *PCB);
 void *pcb_serializePCB(t_PCB *PCB);
-t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int stackIndexVariableCount, int stackIndexArgumentCount);
+t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize);
 void pcb_dump(t_PCB *PCB);
 uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize);
 

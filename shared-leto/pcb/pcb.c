@@ -93,6 +93,7 @@ uint32_t pcb_getPCBSize(t_PCB *PCB){
 
 void *pcb_serializePCB(t_PCB *PCB){
 	int bufferSize = pcb_getPCBSize(PCB);
+	int test = pcb_getBufferSizeFromVariableSize(&PCB->variableSize);
 	int offset = 0;
 
 	void *buffer = malloc(bufferSize);
@@ -166,7 +167,7 @@ void *pcb_serializePCB(t_PCB *PCB){
 
 }
 
-t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int stackIndexVariableCount, int stackIndexArgumentCount){
+t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 	t_PCB *deSerializedPCB = malloc(sizeof(t_PCB));
 	void *buffer;
 	int offset = 0;
@@ -190,13 +191,13 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int st
 	int stackIndexVariableIterator = 0;
 	int stackIndexArgumentIterator = 0;
 
-	if(stackIndexRecordCount != 0){
+	if(variableSize->stackIndexRecordCount != 0){
 		deSerializedPCB->stackIndex = list_create();
-		while(stackIndexRecordIterator < stackIndexRecordCount){
+		while(stackIndexRecordIterator < variableSize->stackIndexRecordCount){
 			t_stackIndexRecord *stackIndexRecord = malloc(sizeof(t_stackIndexRecord));
-			if(stackIndexArgumentCount !=0){
+			if(variableSize->stackArgumentCount !=0){
 				stackIndexRecord->arguments = list_create();
-				while(stackIndexArgumentIterator < stackIndexArgumentCount){
+				while(stackIndexArgumentIterator < variableSize->stackArgumentCount){
 					t_stackVariable *argument = malloc(sizeof(t_stackVariable));
 					memcpy(&(argument->id),serializedPCB+offset,sizeof(char));
 					offset += sizeof(char);
@@ -218,9 +219,9 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, int stackIndexRecordCount, int st
 			offset += sizeof(t_memoryDirection);
 
 
-			if(stackIndexVariableCount !=0){
+			if(variableSize->stackVariableCount !=0){
 				stackIndexRecord->variables = list_create();
-				while(stackIndexVariableIterator < stackIndexVariableCount){
+				while(stackIndexVariableIterator < variableSize->stackVariableCount){
 					t_stackVariable *variable = malloc(sizeof(t_stackVariable));
 					memcpy(&(variable->id),serializedPCB+offset,sizeof(char));
 					offset += sizeof(char);
