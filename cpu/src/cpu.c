@@ -361,7 +361,6 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
  };
 
 int main() {
-
 	// start CPU
 	cpu_start(&myCPU);
 
