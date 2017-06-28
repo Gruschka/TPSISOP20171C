@@ -8,10 +8,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <commons/collections/list.h>
+#include <commons/string.h>
 #include <stdint.h>
 #include <string.h>
 #include "pcb.h"
-/*
+
 
 t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPointer,int32_t ExitCode){
 	t_PCB *dummyReturn = malloc(sizeof(t_PCB));
@@ -56,19 +57,19 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	argumentA->page = 2;
 	argumentA->size = 8 + sizeof(uint32_t);
 	//add a &B
-	pcb_addStackIndexVariable(dummyReturn,dummyStack0,variableA,VARIABLE);
-	pcb_addStackIndexVariable(dummyReturn,dummyStack0,variableB,VARIABLE);
-	pcb_addStackIndexVariable(dummyReturn,dummyStack0,argumentA,ARGUMENT);
+	pcb_addStackIndexVariable(dummyReturn,variableA,VARIABLE);
+	pcb_addStackIndexVariable(dummyReturn,variableB,VARIABLE);
+	pcb_addStackIndexVariable(dummyReturn,argumentA,ARGUMENT);
 
 	//list_add(dummyStack0->variables,variableA);
-	pcb_addStackIndexRecord(dummyReturn,dummyStack0);
+	pcb_addStackIndexRecord(dummyReturn);
 	//list_add(dummyReturn->stackIndex,dummyStack0);
 
 	//t_stackIndexRecord out = (t_stackIndexRecord *) list_get(dummyReturn.stackIndex,0);
 	return dummyReturn;
 }
 
-*/
+
 uint32_t pcb_getPCBSize(t_PCB *PCB){
 	int bufferSize = 0;
 
@@ -407,7 +408,6 @@ uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize){
 	return totalSize;
 
 }
-
 void pcb_destroy(t_PCB *PCB){
 	if(PCB->codeIndex != NULL){
 		free(PCB->codeIndex);
@@ -480,7 +480,6 @@ void pcb_destroy(t_PCB *PCB){
 
 	free(PCB);
 }
-
 t_stackVariable *pcb_getVariable(t_PCB *PCB, char variableName){
 	int variableIterator = 0;
 	if(PCB->stackIndex != NULL){
@@ -497,4 +496,79 @@ t_stackVariable *pcb_getVariable(t_PCB *PCB, char variableName){
 
 	}
 
+}
+void pcb_addSpecificStackIndexRecord(t_PCB *PCB,t_stackIndexRecord *record){
+
+	if (PCB != NULL) {
+		if(PCB->stackIndex == NULL){
+			PCB->stackIndex = list_create();
+		}
+		list_add(PCB->stackIndex,record);
+		PCB->variableSize.stackIndexRecordCount++;
+	}
+}
+int pcb_getDirectionFromLabel(t_PCB *PCB, char *label){
+	int labelIndexIteratorSize = 0;
+	int labelIndexIterator = 0;
+	char *buffer;
+	int labelLength = 0;
+	int pointer;
+	char *compareLabel = strdup(label);
+
+	while(labelIndexIteratorSize < PCB->variableSize.labelIndexSize){
+		labelLength = strlen(PCB->labelIndex+labelIndexIteratorSize) + 1;
+		buffer = malloc(labelLength);
+		memcpy(buffer,PCB->labelIndex+labelIndexIteratorSize,labelLength+1);
+
+		labelIndexIteratorSize += labelLength;
+
+		memcpy(&pointer,PCB->labelIndex+labelIndexIteratorSize,sizeof(int));
+		labelIndexIteratorSize += sizeof(int);
+
+		if(labelLength == 2){
+			compareLabel = string_substring(compareLabel,0,1);
+		}
+		if(!strcmp(buffer,compareLabel)){
+			free(buffer);
+			return pointer;
+		}
+
+		labelIndexIterator++;
+	}
+}
+t_PCBVariableSize pcb_getSizeOfSpecificStack(t_stackIndexRecord *record){
+	t_PCBVariableSize variableSize;
+	variableSize.stackArgumentCount = 0;
+	variableSize.stackVariableCount = 0;
+
+	if(record->arguments !=NULL){
+		variableSize.stackArgumentCount = list_size(record->arguments);
+	}
+	if(record->variables !=NULL){
+		variableSize.stackVariableCount = list_size(record->variables);
+	}
+
+	variableSize.stackIndexRecordCount = 1;
+
+	return variableSize;
+}
+void pcb_decompileStack(t_PCB *PCB){
+	int stackLevelToDecompile = PCB->variableSize.stackIndexRecordCount -1;
+
+	t_stackIndexRecord *record = list_get(PCB->stackIndex,stackLevelToDecompile);
+
+	t_PCBVariableSize variableSize = pcb_getSizeOfSpecificStack(record);
+
+	list_remove(PCB->stackIndex,stackLevelToDecompile);
+
+	PCB->variableSize.stackIndexRecordCount--;
+	PCB->variableSize.stackArgumentCount -= variableSize.stackArgumentCount;
+	PCB->variableSize.stackVariableCount -= variableSize.stackVariableCount;
+}
+t_variableAdd pcb_getVariableAddTypeFromTag(char tag){
+	if (tag=='0' || tag=='1' || tag=='2' || tag=='3' || tag=='4' || tag=='5' || tag=='6' || tag=='7' || tag=='8' || tag=='9'){
+		return ARGUMENT;
+	}else{
+		return VARIABLE;
+	}
 }

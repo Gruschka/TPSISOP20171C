@@ -72,5 +72,10 @@ void pcb_dump(t_PCB *PCB);
 uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize);
 void pcb_destroy(t_PCB *PCB);
 t_stackVariable *pcb_getVariable(t_PCB *PCB, char variableName);
+void pcb_addSpecificStackIndexRecord(t_PCB *PCB,t_stackIndexRecord *record);
+int pcb_getDirectionFromLabel(t_PCB *PCB, char *label);
+t_PCBVariableSize pcb_getSizeOfSpecificStack(t_stackIndexRecord *record);
+void pcb_decompileStack(t_PCB *PCB);
+t_variableAdd pcb_getVariableAddTypeFromTag(char tag);
 
 #endif /* PCB_H_ */
