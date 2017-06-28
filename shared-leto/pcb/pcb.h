@@ -63,13 +63,14 @@ typedef struct t_PCB {
 } __attribute__((packed)) t_PCB;
 
 t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPointer,int32_t ExitCode);
-void pcb_addStackIndexRecord(t_PCB *PCB, t_stackIndexRecord *record);
-void pcb_addStackIndexVariable(t_PCB *PCB, t_stackIndexRecord *stackIndex, t_stackVariable *variable, t_variableAdd type);
+void pcb_addStackIndexRecord(t_PCB *PCB);
+void pcb_addStackIndexVariable(t_PCB *PCB, t_stackVariable *variable, t_variableAdd type);
 uint32_t pcb_getPCBSize(t_PCB *PCB);
 void *pcb_serializePCB(t_PCB *PCB);
 t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize);
 void pcb_dump(t_PCB *PCB);
 uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize);
 void pcb_destroy(t_PCB *PCB);
+t_stackVariable *pcb_getVariable(t_PCB *PCB, char variableName);
 
 #endif /* PCB_H_ */

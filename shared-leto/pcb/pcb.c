@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "pcb.h"
+/*
 
 t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPointer,int32_t ExitCode){
 	t_PCB *dummyReturn = malloc(sizeof(t_PCB));
@@ -66,6 +67,8 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	//t_stackIndexRecord out = (t_stackIndexRecord *) list_get(dummyReturn.stackIndex,0);
 	return dummyReturn;
 }
+
+*/
 uint32_t pcb_getPCBSize(t_PCB *PCB){
 	int bufferSize = 0;
 
@@ -270,22 +273,43 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 
 	return deSerializedPCB;
 }
-void pcb_addStackIndexRecord(t_PCB *PCB, t_stackIndexRecord *record){
-	if (record != NULL && PCB != NULL) {
+void pcb_addStackIndexRecord(t_PCB *PCB){
+	t_stackIndexRecord *record = malloc(sizeof(t_stackIndexRecord));
+	record->arguments = NULL;
+	record->variables = NULL;
+	record->returnPosition = 0;
+	record->returnVariable.offset = 0;
+	record->returnVariable.page = 0;
+	record->returnVariable.size = 0;
+
+	if (PCB != NULL) {
+		if(PCB->stackIndex == NULL){
+			PCB->stackIndex = list_create();
+		}
 		list_add(PCB->stackIndex,record);
 		PCB->variableSize.stackIndexRecordCount++;
 	}
 }
-void pcb_addStackIndexVariable(t_PCB *PCB, t_stackIndexRecord *stackIndex, t_stackVariable *variable, t_variableAdd type){
+void pcb_addStackIndexVariable(t_PCB *PCB, t_stackVariable *variable, t_variableAdd type){
+	if(PCB->stackIndex == NULL){
+		pcb_addStackIndexRecord(PCB);
+	}
+	t_stackIndexRecord *stackIndex = list_get(PCB->stackIndex,PCB->variableSize.stackIndexRecordCount-1);
 	switch (type) {
 		case VARIABLE:
-			if (variable != NULL && stackIndex->variables != NULL) {
+			if (variable != NULL) {
+				if (stackIndex->variables == NULL){
+					stackIndex->variables = list_create();
+				}
 				list_add(stackIndex->variables,variable);
 				PCB->variableSize.stackVariableCount++;
 			}
 			break;
 		case ARGUMENT:
-			if (variable != NULL && stackIndex->arguments != NULL) {
+			if (variable != NULL) {
+				if (stackIndex->arguments == NULL){
+					stackIndex->arguments = list_create();
+				}
 				list_add(stackIndex->arguments,variable);
 				PCB->variableSize.stackArgumentCount++;
 			}
@@ -349,8 +373,8 @@ void pcb_dump(t_PCB *PCB){
 					printf("variables: \n");
 					t_stackVariable *variable = list_get(stackIndexRecord->variables,stackIndexVariableIterator);
 					printf("variable %d id: %c \n",stackIndexVariableIterator,variable->id);
-					printf("variable %d offset: %d \n",stackIndexVariableIterator,variable->offset);
 					printf("variable %d page: %d \n",stackIndexVariableIterator,variable->page);
+					printf("variable %d offset: %d \n",stackIndexVariableIterator,variable->offset);
 					printf("variable %d size: %d \n",stackIndexVariableIterator,variable->size);
 					stackIndexVariableIterator++;
 				}
@@ -455,4 +479,22 @@ void pcb_destroy(t_PCB *PCB){
 	PCB->variableSize.stackVariableCount = 0;
 
 	free(PCB);
+}
+
+t_stackVariable *pcb_getVariable(t_PCB *PCB, char variableName){
+	int variableIterator = 0;
+	if(PCB->stackIndex != NULL){
+		t_stackIndexRecord *record = list_get(PCB->stackIndex,PCB->variableSize.stackIndexRecordCount-1);
+		if(record->variables != NULL){
+			while(variableIterator < PCB->variableSize.stackVariableCount){
+				t_stackVariable *variable = list_get(record->variables,variableIterator);
+				if(variableName == variable->id){
+					return variable;
+				}
+				variableIterator++;
+			}
+		}
+
+	}
+
 }
