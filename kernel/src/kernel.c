@@ -196,9 +196,9 @@ void consolesServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 }
 
-t_CPU *getAvailableCPU() {
+t_CPUx *getAvailableCPU() {
 	int i;
-	t_CPU *cpu = NULL;
+	t_CPUx *cpu = NULL;
 
 	for (i = 0; i < list_size(cpusList); i++) {
 		cpu = list_get(cpusList, i);
@@ -255,7 +255,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 void cpusServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 
-	t_CPU *cpu = malloc(sizeof(t_CPU));
+	t_CPUx *cpu = malloc(sizeof(t_CPUx));
 
 	cpu->fd = fd;
 	cpu->isAvailable = true;
@@ -305,7 +305,7 @@ void *dispatcher_mainFunction(void) {
 		pthread_mutex_lock(&readyQueue_mutex);
 		t_PCB *program = readyQueue_popProcess();
 		void *pcbBuffer = pcb_serializePCB(program);
-		t_CPU *availableCPU = getAvailableCPU();
+		t_CPUx *availableCPU = getAvailableCPU();
 		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
 		log_debug(logger, "[dispatcher] new process <PID:%d> in exec",
 				program->pid);

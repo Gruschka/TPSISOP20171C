@@ -29,7 +29,7 @@ typedef struct t_kernel_config {
 typedef struct t_CPU {
 	int fd;
 	bool isAvailable;
-} t_CPU;
+} t_CPUx;
 
 void fetchConfiguration();
 
