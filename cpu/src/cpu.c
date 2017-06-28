@@ -66,6 +66,7 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 			printf("\nDummy");
 			printf("\nConnecting to DummyMemory\n");
 			myMemory = malloc(512*4);
+			memset(myMemory,0,512*4);
 			CPU->connections[1].portNumber = 9999;
 			CPU->connections[1].status = CONNECTED;
 			printf("\nConnected to memory\n");
@@ -133,11 +134,98 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	PCB->filesTable = NULL;
 	PCB->pc = 0;
 	PCB->pid = rand();
-	PCB->sp = 0;
+	PCB->sp = PCB->codePages +1 * DUMMY_MEMORY_PAGE_SIZE;
 	PCB->stackIndex = NULL;
 
 	return PCB;
 }
+uint32_t cpu_declareVariable(char variableName){
+	printf("declareVariable\n");
+	t_stackVariable *variable = malloc(sizeof(t_stackVariable));
+	int dataBasePage = myCPU.assignedPCB->codePages +1;
+	t_PCBVariableSize *variableSize = &myCPU.assignedPCB->variableSize;
+	int currentVariableSpaceInMemory = (variableSize->stackVariableCount + variableSize->stackArgumentCount) * sizeof(int);
+	int currentVariablePagesInMemory = 0;
+
+	variable->id = variableName;
+	variable->page = dataBasePage;
+	if(currentVariableSpaceInMemory != 0){
+		currentVariablePagesInMemory = currentVariableSpaceInMemory / DUMMY_MEMORY_PAGE_SIZE;
+		variable->page += currentVariablePagesInMemory;
+		variable->offset = currentVariableSpaceInMemory - (currentVariablePagesInMemory * DUMMY_MEMORY_PAGE_SIZE);
+	}else{
+		variable->offset = currentVariableSpaceInMemory;
+	}
+	variable->size = sizeof(int);
+
+	pcb_addStackIndexVariable(myCPU.assignedPCB,variable,VARIABLE);
+	return currentVariableSpaceInMemory;
+}
+void cpu_endProgram(){
+	printf("endProgram\n");
+	myCPU.status = FINISHED;
+	myCPU.instructionPointer = 0;
+	myCPU.variableCounter = 0;
+	pcb_dump(myCPU.assignedPCB);
+	pcb_destroy(myCPU.assignedPCB);
+	myCPU.assignedPCB = NULL;
+}
+uint32_t cpu_getVariablePosition(char variableName){
+	printf("getVariablePosition\n");
+	t_stackVariable *variable = pcb_getVariable(myCPU.assignedPCB,variableName);
+
+	int position = (variable->page * DUMMY_MEMORY_PAGE_SIZE) + variable->offset;
+	return position;
+}
+int cpu_dereference(uint32_t variableAddress){
+	printf("dereference\n");
+	int *valueBuffer = cpu_readMemoryDummy(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int));
+	int value = *valueBuffer;
+	free(valueBuffer);
+	return value;
+}
+void cpu_assignValue(uint32_t variableAddress, int value){
+	printf("assignValue\n");
+	int valueBuffer = value;
+	cpu_writeMemoryDummy(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int),&valueBuffer);
+}
+void cpu_gotoLabel(char *label){
+	printf("gotoLabel\n");
+	int labelIndexIteratorSize = 0;
+	int labelIndexIterator = 0;
+	char *buffer;
+	int labelLength = 0;
+	int pointer;
+
+
+	while(labelIndexIteratorSize < myCPU.assignedPCB->variableSize.labelIndexSize){
+		printf("label %d - tag: %s ",labelIndexIterator,(myCPU.assignedPCB->labelIndex)+labelIndexIteratorSize);
+		labelLength = strlen(myCPU.assignedPCB->labelIndex) + 1;
+		buffer = malloc(labelLength);
+		memcpy(buffer,myCPU.assignedPCB->labelIndex,labelLength);
+		labelIndexIteratorSize += labelLength;
+
+		memcpy(&pointer,myCPU.assignedPCB->labelIndex+labelIndexIteratorSize,sizeof(int));
+		printf("dir: %d\n", pointer);
+		labelIndexIteratorSize += sizeof(int);
+
+		if(!strcmp(buffer,label)){
+			myCPU.instructionPointer = pointer;
+		}
+
+		labelIndexIterator++;
+	}
+}
+void cpu_callNoReturn(char *label){
+	printf("callNoReturn\n");
+}
+void cpu_callWithReturn(char *label, uint32_t returnAddress){
+	printf("callWithReturn\n");
+}
+void cpu_return(int returnValue){
+	printf("return\n");
+}
+
 
 char* PROGRAMA =
 		"begin\n"
@@ -177,35 +265,45 @@ char* PROGRAMA =
 "#!/usr/bin/ansisop\n"
 "\n"
 "begin\n"
-"	variables a\n"
-"	a <- f\n"
-"	prints n a\n"
+"variables a\n"
+"a <- f\n"
+"prints n a\n"
 "end\n"
 "\n"
 "function f\n"
-"	variables a\n"
-"	a=1\n"
-"	prints n a\n"
-"	a <- g\n"
-"	return a\n"
+"variables a\n"
+"a=1\n"
+"prints n a\n"
+"a <- g\n"
+"return a\n"
 "end\n"
 "\n"
 "function g\n"
-"	variables a\n"
-"	a=0\n"
-"	prints n a\n"
-"	a <- f\n"
-"	return a\n"
+"variables a\n"
+"a=0\n"
+"prints n a\n"
+"a <- f\n"
+"return a\n"
 "end\n";
 
+ char *easy=
+		 "begin\n"
+		 "variables a,b,c\n"
+		 "a=3\n"
+		 "print a\n"
+		 "end\n";
 
 
  AnSISOP_funciones functions = {
- 		.AnSISOP_definirVariable		= dummy_definirVariable,
- 		.AnSISOP_obtenerPosicionVariable= dummy_obtenerPosicionVariable,
- 		.AnSISOP_finalizar 				= dummy_finalizar,
- 		.AnSISOP_dereferenciar			= dummy_dereferenciar,
- 		.AnSISOP_asignar				= dummy_asignar,
+ 		.AnSISOP_definirVariable		= cpu_declareVariable,
+ 		.AnSISOP_obtenerPosicionVariable= cpu_getVariablePosition,
+ 		.AnSISOP_finalizar 				= cpu_endProgram,
+ 		.AnSISOP_dereferenciar			= cpu_dereference,
+ 		.AnSISOP_asignar				= cpu_assignValue,
+ 		.AnSISOP_irAlLabel				= cpu_gotoLabel,
+ 		.AnSISOP_llamarConRetorno		= cpu_callWithReturn,
+ 		.AnSISOP_llamarSinRetorno 		= cpu_callNoReturn,
+ 		.AnSISOP_retornar				= cpu_return,
 
  };
 
@@ -218,6 +316,11 @@ int main() {
 
 	// connect to memory -- DUMMY
 	cpu_connect(&myCPU,T_D_MEMORY);
+
+	char *testProgram = strdup(otroPrograma);
+	printf("writing program: %s", testProgram);
+	memcpy(myMemory,testProgram,strlen(testProgram));
+
 	cpu_connect(&myCPU,T_D_KERNEL);
 
 	char *logfile = tmpnam(NULL);
@@ -233,7 +336,7 @@ int main() {
    myCPU.status = WAITING;
 
    //generate PCB
-   t_PCB *dummyPCB = cpu_createPCBFromScript(otroOtroPrograma);
+   t_PCB *dummyPCB = cpu_createPCBFromScript(testProgram);
 
    void *serializedPCB = pcb_serializePCB(dummyPCB);
 
@@ -242,9 +345,35 @@ int main() {
    t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
    memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
 
+   // PCB received
    t_PCB *newPCB = pcb_deSerializePCB(serializedPCB,variableInfo);
 
    pcb_dump(newPCB);
+
+
+   myCPU.assignedPCB = newPCB;
+   myCPU.status = RUNNING;
+   myCPU.quantum = 15;
+
+   //instruction cycle
+   while(myCPU.status == RUNNING && myCPU.quantum > 0){
+	   //cpu fetch
+	   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
+	   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
+	   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
+
+	   void *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
+	   fflush(stdout);
+	   printf("fetched instruction is: %s",(char *) instruction);
+
+
+	   //cpu decode & execute
+	   analizadorLinea(instruction,&functions,&kernel_functions);
+
+	   myCPU.quantum--;
+	   myCPU.instructionPointer++;
+   }
+
 
 	return EXIT_SUCCESS;
 }

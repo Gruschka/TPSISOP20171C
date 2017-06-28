@@ -37,6 +37,8 @@ typedef enum{
 	INTERRUPTED,
 	CONNECTED,
 	DISCONNECTED,
+	FINISHED,
+	FINISHED_QUANTUM,
 }t_CPUStatus;
 
 typedef struct variableReference{
@@ -54,6 +56,7 @@ typedef struct CPUConnection{
 }t_CPUConnection;
 
 typedef struct CPU{
+	int quantum;
 	int variableCounter;
 	t_CPUConnection connections[2];
 	int instructionPointer;
@@ -72,6 +75,14 @@ uint32_t cpu_getPCB(t_CPU *CPU, t_PCB PCB);
 void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size);
 uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer);
 t_PCB *cpu_createPCBFromScript(char *script);
-
+uint32_t cpu_declareVariable(char variableName);
+void cpu_endProgram();
+uint32_t cpu_getVariablePosition(char variableName);
+int cpu_dereference(uint32_t variableAddress);
+void cpu_assignValue(uint32_t variableAddress, int value);
+void cpu_gotoLabel(char *label);
+void cpu_callNoReturn(char *label);
+void cpu_callWithReturn(char *label, uint32_t returnAddress);
+void cpu_return(int returnValue);
 
 #endif /* CPU_H_ */
