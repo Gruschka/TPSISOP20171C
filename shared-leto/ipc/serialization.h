@@ -21,7 +21,11 @@ typedef enum {
 	PROGRAM_START_RESPONSE,
 	PROGRAM_FINISH,
 	MEMORY_NEW_PAGE,
-	MEMORY_NEW_PAGE_RESPONSE
+	MEMORY_NEW_PAGE_RESPONSE,
+	GET_SHARED_VARIABLE,
+	GET_SHARED_VARIABLE_RESPONSE,
+	SET_SHARED_VARIABLE,
+	SET_SHARED_VARIABLE_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -68,6 +72,27 @@ typedef struct memory_new_page_response {
 	ipc_header header;
 	char success;
 } __attribute__((packed)) ipc_struct_memory_new_page_response;
+
+typedef struct get_shared_variable {
+	ipc_header header;
+	char *identifier;
+} __attribute__((packed)) ipc_struct_get_shared_variable;
+
+typedef struct get_shared_variable_response {
+	ipc_header header;
+	int value;
+} __attribute__((packed)) ipc_struct_get_shared_variable_response;
+
+typedef struct set_shared_variable {
+	ipc_header header;
+	int value;
+	char *identifier;
+} __attribute__((packed)) ipc_struct_set_shared_variable;
+
+typedef struct set_shared_variable_response {
+	ipc_header header;
+	int value;
+} __attribute__((packed)) ipc_struct_set_shared_variable_response;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 

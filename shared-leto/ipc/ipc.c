@@ -170,3 +170,19 @@ ipc_struct_memory_new_page *ipc_memory_receiveNewPageRequest(int fd) {
 	free(header);
 	return response;
 }
+
+void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
+	ipc_struct_get_shared_variable *request = malloc(sizeof(ipc_struct_get_shared_variable));
+
+	request->header.operationIdentifier = GET_SHARED_VARIABLE;
+	request->identifier = identifier;
+
+	int totalSize = sizeof(ipc_header) + strlen(identifier) + 1;
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, &(request->header), sizeof(ipc_header));
+	memcpy(buffer + sizeof(ipc_header), request->identifier, strlen(identifier) + 1);
+	send(fd, buffer, totalSize, 0);
+
+	free(request);
+	free(buffer);
+}

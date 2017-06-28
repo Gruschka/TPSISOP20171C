@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 	}
 
 	pthread_create(&consolesServerThread, NULL, consolesServer_main, NULL );
-	pthread_create(&cpusServerThread, NULL, cpusServer_main, NULL);
+	pthread_create(&cpusServerThread, NULL, cpusServer_main, NULL );
 	pthread_create(&schedulerThread, NULL, (void *) scheduler_mainFunction,
 			NULL );
 	pthread_create(&dispatcherThread, NULL, (void *) dispatcher_mainFunction,
@@ -230,18 +230,11 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_server_sendHandshakeResponse(fd, 1);
 		break;
 	}
-	case PROGRAM_START: {
-		ipc_struct_program_start *programStart = buffer;
-		char *codeString = malloc(
-				sizeof(char) * (programStart->codeLength + 1));
-		memcpy(codeString, programStart->code, programStart->codeLength);
-		codeString[programStart->codeLength] = '\0';
-		log_info(logger, "Program received. Code length: %d. Code: %s",
-				programStart->codeLength, codeString);
-		t_PCB *newProgram = malloc(sizeof(t_PCB));
-		newProgram->pid = ++lastPID;
-		ipc_sendStartProgramResponse(fd, newProgram->pid);
-		executeNewProgram(newProgram);
+	case GET_SHARED_VARIABLE: {
+
+		ipc_struct_get_shared_variable *request = buffer;
+		log_info(logger, "get_shared_variable. identifier: %s", request->identifier);
+
 		break;
 	}
 	case PROGRAM_FINISH: {
@@ -276,7 +269,6 @@ void cpusServerSocket_handleDisconnection(int fd) {
 
 //////////////////////////////////////////////////////////////////////////////
 
-
 void *scheduler_mainFunction(void) {
 	while (1) {
 		log_debug(logger, "[scheduler] waiting for programs in new q");
@@ -310,7 +302,8 @@ void *dispatcher_mainFunction(void) {
 		void *pcbBuffer = pcb_serializePCB(program);
 		t_CPUx *availableCPU = getAvailableCPU();
 		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
-		log_debug(logger, "[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
+		log_debug(logger,
+				"[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
 				program->pid, availableCPU->fd, pcb_getPCBSize(program));
 		pthread_mutex_unlock(&readyQueue_mutex);
 		pthread_mutex_unlock(&execList_mutex);
@@ -334,12 +327,12 @@ void *configurationWatcherThread_mainFunction() {
 
 	if (fd == -1) {
 		log_error(logger, "Error while initializing inotify");
-		pthread_exit(NULL);
+		pthread_exit(NULL );
 	}
 
 	if (inotify_add_watch(fd, __config->path, IN_MODIFY) == -1) {
 		log_error(logger, "Error adding inotify watch");
-		pthread_exit(NULL);
+		pthread_exit(NULL );
 	}
 
 	log_debug(logger,
@@ -350,7 +343,8 @@ void *configurationWatcherThread_mainFunction() {
 		length = read(fd, buffer, EVENT_BUF_LEN);
 
 		if (length <= 0) {
-			log_error(logger, "[configuration-watcher] error reading inotify event");
+			log_error(logger,
+					"[configuration-watcher] error reading inotify event");
 		}
 
 		i = 0;
