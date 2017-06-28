@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
 	readyQueue = readyQueue_create();
 	execList = execList_create();
 	sharedVariables = list_create();
+	cpusList = list_create();
 
 	testMemory();
 
@@ -261,6 +262,7 @@ void cpusServerSocket_handleNewConnection(int fd) {
 	cpu->isAvailable = true;
 
 	list_add(cpusList, cpu);
+	sem_post(&exec_spaces);
 }
 
 void cpusServerSocket_handleDisconnection(int fd) {
@@ -303,12 +305,13 @@ void *dispatcher_mainFunction(void) {
 		sem_wait(&exec_spaces);
 		pthread_mutex_lock(&execList_mutex);
 		pthread_mutex_lock(&readyQueue_mutex);
-		t_PCB *program = readyQueue_popProcess();
+//		t_PCB *program = readyQueue_popProcess();
+		t_PCB *program = pcb_createDummy(1, 2, 3, 4);
 		void *pcbBuffer = pcb_serializePCB(program);
 		t_CPUx *availableCPU = getAvailableCPU();
 		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
-		log_debug(logger, "[dispatcher] new process <PID:%d> in exec",
-				program->pid);
+		log_debug(logger, "[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
+				program->pid, availableCPU->fd, pcb_getPCBSize(program));
 		pthread_mutex_unlock(&readyQueue_mutex);
 		pthread_mutex_unlock(&execList_mutex);
 		sem_post(&exec_programs);
