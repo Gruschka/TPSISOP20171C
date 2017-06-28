@@ -27,6 +27,8 @@
 typedef enum{
 	T_KERNEL,
 	T_MEMORY,
+	T_D_KERNEL,
+	T_D_MEMORY
 }t_connectionType;
 
 typedef enum{
@@ -69,7 +71,7 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType);
 uint32_t cpu_getPCB(t_CPU *CPU, t_PCB PCB);
 void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size);
 uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer);
-
+t_PCB *cpu_createPCBFromScript(char *script);
 
 
 #endif /* CPU_H_ */
