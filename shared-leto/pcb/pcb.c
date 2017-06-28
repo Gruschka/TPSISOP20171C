@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <commons/collections/list.h>
 #include <stdint.h>
+#include <string.h>
 #include "pcb.h"
 
 t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackPointer,int32_t ExitCode){
@@ -22,6 +23,7 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	dummyReturn->variableSize.stackArgumentCount = 0;
 	dummyReturn->variableSize.stackIndexRecordCount = 0;
 	dummyReturn->variableSize.stackVariableCount = 0;
+	dummyReturn->filesTable = NULL;
 	// create stack index list
 	dummyReturn->stackIndex = list_create();
 	// create current stack
@@ -64,12 +66,11 @@ t_PCB *pcb_createDummy(int32_t processID, int32_t programCounter, int32_t StackP
 	//t_stackIndexRecord out = (t_stackIndexRecord *) list_get(dummyReturn.stackIndex,0);
 	return dummyReturn;
 }
-
 uint32_t pcb_getPCBSize(t_PCB *PCB){
 	int bufferSize = 0;
 
-	// pid, pc, sp, ec, filesTable
-	int PCBFixedVariablesSize = sizeof(uint32_t) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(void *);
+	// pid, pc, sp, ec, filesTable, codePages
+	int PCBFixedVariablesSize = sizeof(uint32_t) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(void *) + sizeof(uint32_t);
 
 	bufferSize += PCBFixedVariablesSize;
 
@@ -88,9 +89,13 @@ uint32_t pcb_getPCBSize(t_PCB *PCB){
 	int administrativeVariableDataSize = sizeof(t_PCBVariableSize);
 	bufferSize += administrativeVariableDataSize;
 
+	int instructionIndexSize = PCB->variableSize.instructionCount * sizeof(t_codeIndex);
+	bufferSize += instructionIndexSize;
+
+	bufferSize += PCB->variableSize.labelIndexSize;
+
 	return bufferSize;
 }
-
 void *pcb_serializePCB(t_PCB *PCB){
 	int bufferSize = pcb_getPCBSize(PCB);
 	int test = pcb_getBufferSizeFromVariableSize(&PCB->variableSize);
@@ -114,6 +119,16 @@ void *pcb_serializePCB(t_PCB *PCB){
 	memcpy(buffer+offset,&(PCB->ec),sizeof(uint32_t));
 	offset += sizeof(uint32_t);
 
+	memcpy(buffer+offset,&(PCB->codePages),sizeof(uint32_t));
+	offset += sizeof(uint32_t);
+
+	int codeIndexSize = PCB->variableSize.instructionCount * sizeof(t_codeIndex);
+	memcpy(buffer+offset,PCB->codeIndex,codeIndexSize);
+	offset += codeIndexSize;
+
+	memcpy(buffer+offset,PCB->labelIndex,PCB->variableSize.labelIndexSize);
+	offset += PCB->variableSize.labelIndexSize;
+
 	int stackIndexRecordIterator = 0;
 	int stackIndexVariableIterator = 0;
 	int stackIndexArgumentIterator = 0;
@@ -135,11 +150,6 @@ void *pcb_serializePCB(t_PCB *PCB){
 					stackIndexArgumentIterator++;
 				}
 			}
-			memcpy(buffer+offset,&(stackIndexRecord->returnPosition),sizeof(uint32_t));
-			offset += sizeof(uint32_t);
-
-			memcpy(buffer+offset,&(stackIndexRecord->returnVariable),sizeof(t_memoryDirection));
-			offset += sizeof(t_memoryDirection);
 
 			if(PCB->variableSize.stackVariableCount != 0 && stackIndexRecord->variables != NULL){
 				while(stackIndexVariableIterator < PCB->variableSize.stackVariableCount){
@@ -156,6 +166,12 @@ void *pcb_serializePCB(t_PCB *PCB){
 				}
 			}
 
+			memcpy(buffer+offset,&(stackIndexRecord->returnPosition),sizeof(uint32_t));
+			offset += sizeof(uint32_t);
+
+			memcpy(buffer+offset,&(stackIndexRecord->returnVariable),sizeof(t_memoryDirection));
+			offset += sizeof(t_memoryDirection);
+
 			stackIndexRecordIterator++;
 		}
 	}
@@ -166,7 +182,6 @@ void *pcb_serializePCB(t_PCB *PCB){
 	return buffer;
 
 }
-
 t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 	t_PCB *deSerializedPCB = malloc(sizeof(t_PCB));
 	void *buffer;
@@ -186,6 +201,18 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 
 	memcpy(&(deSerializedPCB->ec),serializedPCB+offset,sizeof(uint32_t));
 	offset += sizeof(uint32_t);
+
+	memcpy(&(deSerializedPCB->codePages),serializedPCB+offset,sizeof(uint32_t));
+	offset += sizeof(uint32_t);
+
+	int codeIndexSize = variableSize->instructionCount * sizeof(t_codeIndex);
+	deSerializedPCB->codeIndex = malloc(codeIndexSize);
+	memcpy(deSerializedPCB->codeIndex,serializedPCB+offset,codeIndexSize);
+	offset += codeIndexSize;
+
+	deSerializedPCB->labelIndex = malloc(variableSize->labelIndexSize);
+	memcpy(deSerializedPCB->labelIndex,serializedPCB+offset,variableSize->labelIndexSize);
+	offset += variableSize->labelIndexSize;
 
 	int stackIndexRecordIterator = 0;
 	int stackIndexVariableIterator = 0;
@@ -212,12 +239,6 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 					stackIndexArgumentIterator++;
 				}
 			}
-			memcpy(&(stackIndexRecord->returnPosition),serializedPCB+offset,(sizeof(uint32_t)));
-			offset += sizeof(uint32_t);
-
-			memcpy(&(stackIndexRecord->returnVariable),serializedPCB+offset,(sizeof(t_memoryDirection)));
-			offset += sizeof(t_memoryDirection);
-
 
 			if(variableSize->stackVariableCount !=0){
 				stackIndexRecord->variables = list_create();
@@ -236,7 +257,11 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 					stackIndexVariableIterator++;
 				}
 			}
+			memcpy(&(stackIndexRecord->returnPosition),serializedPCB+offset,(sizeof(uint32_t)));
+			offset += sizeof(uint32_t);
 
+			memcpy(&(stackIndexRecord->returnVariable),serializedPCB+offset,(sizeof(t_memoryDirection)));
+			offset += sizeof(t_memoryDirection);
 
 			list_add(deSerializedPCB->stackIndex,stackIndexRecord);
 			stackIndexRecordIterator++;
@@ -245,8 +270,6 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 
 	return deSerializedPCB;
 }
-
-
 void pcb_addStackIndexRecord(t_PCB *PCB, t_stackIndexRecord *record){
 	if (record != NULL && PCB != NULL) {
 		list_add(PCB->stackIndex,record);
@@ -271,17 +294,37 @@ void pcb_addStackIndexVariable(t_PCB *PCB, t_stackIndexRecord *stackIndex, t_sta
 			break;
 	}
 }
-
 void pcb_dump(t_PCB *PCB){
 	printf("PCB DUMP \n");
 	printf("pid: %d \n",PCB->pid);
 	printf("pc: %d \n",PCB->pc);
 	printf("sp: %d \n",PCB->sp);
 	printf("ec: %d \n",PCB->ec);
+	printf("codePages: %d \n",PCB->codePages);
 
 	int stackIndexRecordIterator = 0;
 	int stackIndexVariableIterator = 0;
 	int stackIndexArgumentIterator = 0;
+	int codeIndexIterator = 0;
+	int labelIndexIterator = 0;
+	int labelIndexIteratorSize = 0;
+
+	printf("code index\n");
+	while(codeIndexIterator < PCB->variableSize.instructionCount){
+		printf("instruction %d - start: %d size: %d\n", codeIndexIterator,PCB->codeIndex[codeIndexIterator].start,PCB->codeIndex[codeIndexIterator].size);
+		codeIndexIterator++;
+	}
+
+	printf("label index\n");
+	int test = 0;
+	while(labelIndexIteratorSize < PCB->variableSize.labelIndexSize){
+		printf("label %d - tag: %s ",labelIndexIterator,(PCB->labelIndex)+labelIndexIteratorSize);
+		labelIndexIteratorSize += strlen(PCB->labelIndex) + 1;
+		memcpy(&test,PCB->labelIndex+labelIndexIteratorSize,sizeof(int));
+		printf("dir: %d\n", test);
+		labelIndexIteratorSize += sizeof(int);
+		labelIndexIterator++;
+	}
 
 	if(PCB->variableSize.stackIndexRecordCount != 0 && PCB->stackIndex != NULL){
 		while(stackIndexRecordIterator < PCB->variableSize.stackIndexRecordCount){
@@ -319,15 +362,14 @@ void pcb_dump(t_PCB *PCB){
 
 
 }
-
 uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize){
 	uint32_t totalSize = 0;
 
 	// variable size
 	totalSize += sizeof(t_PCBVariableSize);
 
-	// pid, pc, sp, ec, filesTable
-	totalSize += sizeof(uint32_t) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(void *);
+	// pid, pc, sp, ec, filesTable, codePages
+	totalSize += sizeof(uint32_t) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(void *) + sizeof(uint32_t);
 
 	// fixed data for each stack index record
 	totalSize += variableSize->stackIndexRecordCount * (sizeof(uint32_t) + sizeof(t_memoryDirection));
@@ -335,6 +377,82 @@ uint32_t pcb_getBufferSizeFromVariableSize(t_PCBVariableSize *variableSize){
 	// variables and arguments
 	totalSize += (variableSize->stackVariableCount + variableSize->stackArgumentCount) * sizeof(t_stackVariable);
 
+	// label and instruction indexes
+	totalSize += (variableSize->instructionCount * sizeof(t_codeIndex)) + variableSize->labelIndexSize;
+
 	return totalSize;
 
+}
+
+void pcb_destroy(t_PCB *PCB){
+	if(PCB->codeIndex != NULL){
+		free(PCB->codeIndex);
+		PCB->codeIndex = NULL;
+	}
+
+	if(PCB->labelIndex != NULL){
+		free(PCB->labelIndex);
+		PCB->labelIndex = NULL;
+	}
+
+	if(PCB->filesTable != NULL){
+		free(PCB->filesTable);
+		PCB->filesTable = NULL;
+	}
+
+	PCB->codePages = 0;
+	PCB->ec = 0;
+	PCB->pc = 0;
+	PCB->pid = 0;
+	PCB->sp = 0;
+
+	int stackIndexRecordIterator = 0;
+	int stackIndexVariableIterator = 0;
+	int stackIndexArgumentIterator = 0;
+	int codeIndexIterator = 0;
+
+	if(PCB->stackIndex != NULL){
+		while(stackIndexRecordIterator < PCB->variableSize.stackIndexRecordCount){
+			t_stackIndexRecord *record = list_get(PCB->stackIndex,stackIndexRecordIterator);
+			if(record->arguments != NULL){
+				while(stackIndexArgumentIterator < PCB->variableSize.stackArgumentCount){
+					t_stackVariable *argument = list_get(record->arguments,stackIndexArgumentIterator);
+					free(argument);
+					stackIndexArgumentIterator++;
+				}
+				list_destroy(record->arguments);
+				if(record->arguments != NULL){
+					record->arguments = NULL;
+				}
+			}
+			if(record->variables !=NULL){
+				while(stackIndexVariableIterator < PCB->variableSize.stackVariableCount){
+					t_stackVariable *variable = list_get(record->variables,stackIndexVariableIterator);
+					free(variable);
+					stackIndexVariableIterator++;
+				}
+				list_destroy(record->variables);
+				if(record->variables != NULL){
+					record->variables = NULL;
+				}
+			}
+			record->returnPosition = 0;
+			record->returnVariable.offset = 0;
+			record->returnVariable.page = 0;
+			record->returnVariable.size = 0;
+			free(record);
+			stackIndexRecordIterator++;
+		}
+		list_destroy(PCB->stackIndex);
+		if(PCB->stackIndex != NULL){
+			PCB->stackIndex = NULL;
+		}
+	}
+	PCB->variableSize.instructionCount = 0;
+	PCB->variableSize.labelIndexSize = 0;
+	PCB->variableSize.stackArgumentCount = 0;
+	PCB->variableSize.stackIndexRecordCount = 0;
+	PCB->variableSize.stackVariableCount = 0;
+
+	free(PCB);
 }
