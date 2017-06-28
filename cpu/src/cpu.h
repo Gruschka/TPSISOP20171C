@@ -31,6 +31,12 @@ typedef enum{
 	T_D_MEMORY
 }t_connectionType;
 
+typedef struct{
+	bool read;
+	bool write;
+	bool creation;
+} t_flags;
+
 typedef enum{
 	RUNNING,
 	WAITING,
@@ -84,5 +90,16 @@ void cpu_gotoLabel(char *label);
 void cpu_callNoReturn(char *label);
 void cpu_callWithReturn(char *label, uint32_t returnAddress);
 void cpu_return(int returnValue);
+void cpu_kernelWait(char *semaphoreId);
+void cpu_kernelSignal(char *semaphoreId);
+uint32_t cpu_kernelAlloc(int size);
+void cpu_kernelFree(uint32_t pointer);
+uint32_t cpu_kernelOpen(char *address, t_flags flags);
+void cpu_kernelDelete(uint32_t fileDescriptor);
+void cpu_kernelClose(uint32_t fileDescriptor);
+void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position);
+void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size);
+void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size);
+t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address);
 
 #endif /* CPU_H_ */
