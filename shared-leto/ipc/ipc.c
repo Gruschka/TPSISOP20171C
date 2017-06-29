@@ -195,7 +195,7 @@ void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
 	request->header.operationIdentifier = GET_SHARED_VARIABLE;
 	request->identifier = identifier;
 
-	int totalSize = sizeof(ipc_header) + strlen(identifier) + 1;
+	int totalSize = sizeof(ipc_header) + sizeof(uint32_t) + strlen(identifier) + 1;
 	int identifierLength = strlen(identifier);
 	void *buffer = malloc(totalSize);
 	memcpy(buffer, &(request->header), sizeof(ipc_header));
@@ -205,4 +205,11 @@ void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
 
 	free(request);
 	free(buffer);
+}
+
+int ipc_client_waitSharedVariableValue(int fd) {
+	ipc_struct_get_shared_variable_response response;
+
+	recv(fd, &response, sizeof(ipc_struct_get_shared_variable_response), 0);
+	return response.value;
 }

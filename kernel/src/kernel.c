@@ -235,6 +235,11 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_get_shared_variable *request = buffer;
 		log_info(logger, "get_shared_variable. identifier: %s", request->identifier);
 
+		ipc_struct_get_shared_variable_response response;
+		response.header.operationIdentifier = GET_SHARED_VARIABLE_RESPONSE;
+		response.value = getSharedVariableValue(request->identifier);
+
+		send(fd, &response, sizeof(ipc_struct_get_shared_variable_response), 0);
 		break;
 	}
 	case PROGRAM_FINISH: {
