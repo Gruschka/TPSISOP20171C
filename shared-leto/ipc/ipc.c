@@ -206,3 +206,10 @@ void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
 	free(request);
 	free(buffer);
 }
+
+int ipc_client_waitSharedVariableValue(int fd) {
+	ipc_struct_get_shared_variable_response response;
+
+	recv(fd, &response, sizeof(ipc_struct_get_shared_variable_response), 0);
+	return response.value;
+}
