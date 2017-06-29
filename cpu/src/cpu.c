@@ -42,8 +42,8 @@ uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint
 }
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
-	CPU->connections[T_KERNEL].host = "127.0.0.1";
-	CPU->connections[T_KERNEL].portNumber = 5000;
+	CPU->connections[T_KERNEL].host = "10.0.1.90";
+	CPU->connections[T_KERNEL].portNumber = 5001;
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
@@ -100,7 +100,7 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 			break;
 		case T_D_KERNEL:
 			printf("\nConnecting to Dummy Kernel\n");
-			CPU->connections[0].status = CONNECTED;
+			CPU->connections[KERNEL].status = CONNECTED;
 			printf("\nConnected to Dummy Kernel\n");
 			break;
 		default:
@@ -119,6 +119,9 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	int codePagesCount = programLength / DUMMY_MEMORY_PAGE_SIZE;
 	int instructionCount = program->instrucciones_size;
 
+	PCB->variableSize.stackArgumentCount = 0;
+	PCB->variableSize.stackIndexRecordCount = 0;
+	PCB->variableSize.stackVariableCount = 0;
 
 	PCB->codePages = codePagesCount;
 
@@ -308,29 +311,19 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
 
 	return direction;
 }
+int cpu_sharedVariableGet(char *identifier){
+	printf("sharedVariableGet identifier: %s\n", identifier);
+	ipc_client_sendGetSharedVariable(myCPU.connections[T_KERNEL].socketFileDescriptor,identifier);
+}
+int cpu_sharedVariableSet(char *identifier, int value){
+	printf("sharedVariableSet");
+}
 
- char *program =
+char *program =
 "#!/usr/bin/ansisop\n"
 "\n"
 "begin\n"
-"variables a\n"
-"a <- f\n"
-"prints n a\n"
-"end\n"
-"\n"
-"function f\n"
-"variables a\n"
-"a=1\n"
-"prints n a\n"
-"a <- g\n"
-"return a\n"
-"end\n"
-"\n"
-"function g\n"
-"variables a\n"
-"a=0\n"
-"prints n a\n"
-"return a\n"
+"!Global = !Global + 1\n"
 "end\n";
 
 
@@ -344,6 +337,8 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
  		.AnSISOP_llamarConRetorno		= cpu_callWithReturn,
  		.AnSISOP_llamarSinRetorno 		= cpu_callNoReturn,
  		.AnSISOP_retornar				= cpu_return,
+ 		.AnSISOP_obtenerValorCompartida = cpu_sharedVariableGet,
+ 		.AnSISOP_asignarValorCompartida = cpu_sharedVariableSet,
 
  };
 
@@ -371,18 +366,18 @@ int main() {
 	//printf("writing program: %s", testProgram);
 	memcpy(myMemory,testProgram,strlen(testProgram));
 
-	cpu_connect(&myCPU,T_D_KERNEL);
+	cpu_connect(&myCPU,T_KERNEL);
 
 	char *logfile = tmpnam(NULL);
 
 	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
 
-/*   // Send handshake and wait for response
-   ipc_client_sendHandshake(CPU, myCPU.connections[0].socketFileDescriptor);
-   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(myCPU.connections[0].socketFileDescriptor);
+   // Send handshake and wait for response
+   ipc_client_sendHandshake(CPU, myCPU.connections[T_KERNEL].socketFileDescriptor);
+   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(myCPU.connections[T_KERNEL].socketFileDescriptor);
    free(response);
 
- */  //wait for PCB
+   //wait for PCB
    myCPU.status = WAITING;
 
    //generate PCB
@@ -412,7 +407,8 @@ int main() {
 	   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
 	   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
 
-	   void *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
+	   char *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
+	   instruction[currentInstructionIndex.size]='\0';
 	   fflush(stdout);
 	   printf("fetched instruction is: %s\n",(char *) instruction);
 	   fflush(stdout);

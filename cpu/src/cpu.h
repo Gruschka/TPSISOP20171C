@@ -101,5 +101,6 @@ void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position);
 void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size);
 void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size);
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address);
-
+int cpu_sharedVariableGet(char *identifier);
+int cpu_sharedVariableSet(char *identifier, int value);
 #endif /* CPU_H_ */
