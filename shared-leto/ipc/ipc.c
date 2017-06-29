@@ -51,6 +51,24 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 
 				break;
 			}
+			case GET_SHARED_VARIABLE: {
+				ipc_struct_get_shared_variable *request = malloc(sizeof(ipc_struct_get_shared_variable));
+				ipc_header *header = malloc(sizeof(ipc_header));
+				recv(fd, header, sizeof(ipc_header), 0);
+
+				request->header = *header;
+
+				uint32_t identifierLength;
+				recv(fd, &identifierLength, sizeof(uint32_t), 0);
+
+				char *identifierBuf = malloc(identifierLength + 1);
+				recv(fd, identifierBuf, identifierLength + 1, 0);
+
+				request->identifier = identifierBuf;
+				request->identifierLength = identifierLength;
+
+				deserializedStructHandler(fd, header->operationIdentifier, request);
+			}
 		default:
 			break;
 		}
@@ -178,9 +196,11 @@ void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
 	request->identifier = identifier;
 
 	int totalSize = sizeof(ipc_header) + strlen(identifier) + 1;
+	int identifierLength = strlen(identifier);
 	void *buffer = malloc(totalSize);
 	memcpy(buffer, &(request->header), sizeof(ipc_header));
-	memcpy(buffer + sizeof(ipc_header), request->identifier, strlen(identifier) + 1);
+	memcpy(buffer + sizeof(ipc_header), &identifierLength, sizeof(uint32_t));
+	memcpy(buffer + sizeof(ipc_header) + sizeof(uint32_t), request->identifier, strlen(identifier) + 1);
 	send(fd, buffer, totalSize, 0);
 
 	free(request);

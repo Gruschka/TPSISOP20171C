@@ -75,6 +75,7 @@ typedef struct memory_new_page_response {
 
 typedef struct get_shared_variable {
 	ipc_header header;
+	uint32_t identifierLength;
 	char *identifier;
 } __attribute__((packed)) ipc_struct_get_shared_variable;
 
