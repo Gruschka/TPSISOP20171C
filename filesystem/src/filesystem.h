@@ -8,6 +8,34 @@
 #ifndef FILESYSTEM_H_
 #define FILESYSTEM_H_
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <commons/bitarray.h>
+
+
+#define METADATA_DIR "/Metadata/";
+
+typedef struct metadata{
+	int blockAmount;
+	int blockSize;
+	char *magicNumber;
+}t_FSMetadata;
+
+typedef struct FS{
+	DIR *mountDirectory;
+	DIR *metadataDirectory;
+	DIR *filesDirectory;
+	DIR *dataDirectory;
+	char *mountDirectoryPath;
+	char *MetadataDirectoryPath;
+	char *FSMetadataFileName;
+	char *bitmapFileName;
+	char *filesDirectoryPath;
+	char *dataDirectoryPath;
+	t_bitarray *bitmap;
+	t_FSMetadata metadata;
+}t_FS;
 /*
 Validar Archivo
 Parámetros: [Path]
@@ -25,5 +53,14 @@ Guardar Datos
 Parámetros: [Path, Offset, Size, Buffer]
 Ante un pedido de escritura el File System almacenará en el path enviado por parámetro, los bytes del buffer, definidos por el valor del Size y a partir del offset solicitado. Requiere que el archivo se encuentre abierto en modo escritura (“w”).
 */
+
+int fs_loadConfig(t_FS *FS);
+int fs_mount(t_FS *FS, char *path);
+int fs_openOrCreateMetadata();
+int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumber);
+t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor);
+
+
+extern t_FS myFS;
 
 #endif /* FILESYSTEM_H_ */
