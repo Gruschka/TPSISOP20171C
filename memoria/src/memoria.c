@@ -410,7 +410,7 @@ void dump_cache() {
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
-		char *buffer = malloc(k_frameSize);
+		char *buffer = malloc(k_frameSize + 1);
 		memcpy(buffer, entry->pageContentPointer, k_frameSize);
 
 		int j;
@@ -419,6 +419,7 @@ void dump_cache() {
 				buffer[j] = '-';
 			}
 		}
+		buffer[k_frameSize] = '\0';
 
 		log_info(log, "(Entrada de cache n° %d) processID: %d; processPageNumber: %d; lruCounter: %d; pageContent: %s", i, entry->processID, entry->processPageNumber, entry->lruCounter, buffer);
 
@@ -457,7 +458,7 @@ void dump_pagesContentForProcess(u_int32_t processID) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
 		if (entry->processID == processID) {
 			void *frame = getFramePointerForPageIndex(i);
-			char *buffer = malloc(k_frameSize);
+			char *buffer = malloc(k_frameSize + 1);
 			memcpy(buffer, frame, k_frameSize);
 
 			int j;
@@ -466,6 +467,7 @@ void dump_pagesContentForProcess(u_int32_t processID) {
 					buffer[j] = '-';
 				}
 			}
+			buffer[k_frameSize] = '\0';
 
 			log_info(log, "(Virtual Page n° %d) pageContent: %s", entry->processPageNumber, buffer);
 			free(buffer);
@@ -486,6 +488,13 @@ void dump_assignedPagesContent() {
 //////// Fin de dumps
 
 //////// Comienzo de consola
+
+void menu_dumpSpecificProcessPagesContents() {
+	printf("Introduzca el processID del proceso para el cual desea dumpear sus contenidos de memoria: \n> ");
+	int processID = 0;
+	scanf("%d", &processID);
+	dump_pagesContentForProcess(processID);
+}
 
 void menu_configurePhysicalMemoryDelay() {
 	int newDelay = 0;
@@ -510,7 +519,7 @@ void menu_dump() {
 		case 1: dump_cache(); break;
 		case 2: dump_pageEntriesAndActiveProcesses(); break;
 		case 3: dump_assignedPagesContent(); break;
-		case 4: printf("TODO: dumpear contenido de la memoria para un proceso en particular.\n\n"); break;
+		case 4: menu_dumpSpecificProcessPagesContents(); break;
 		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
 		}
 	} while (optionIndex > 3);
