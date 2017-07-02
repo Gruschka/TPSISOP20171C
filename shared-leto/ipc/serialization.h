@@ -87,6 +87,7 @@ typedef struct get_shared_variable_response {
 typedef struct set_shared_variable {
 	ipc_header header;
 	int value;
+	int identifierLength;
 	char *identifier;
 } __attribute__((packed)) ipc_struct_set_shared_variable;
 
