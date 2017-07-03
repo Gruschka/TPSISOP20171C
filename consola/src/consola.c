@@ -125,20 +125,30 @@ void showMenu(){
 	}while (menuopt != 6);
 }
 void startProgram(char * programPath) {
+    int chk,rc;
 
 	printf("\nInitiating:%s\n", programPath);
 
 	//Thread ID
 	pthread_t threadId;
 
-
 	//Create thread attributes
-
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 
 
+	//Set to detached
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+
+	//Create thread
 	pthread_create(&threadId, &attr, executeProgram, programPath);
+
+
+
+
+
+
 	printf("El tid dentro de SP es: %u", threadId);
 
 
@@ -310,10 +320,9 @@ void connectToKernel(char * program){
 	   // Send handshake and wait for response
 	   ipc_client_sendHandshake(CONSOLE, sockfd);
 	   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(sockfd);
-
 	   log_debug(logger, "Se recibió respuesta de handshake. Success: %d", response->success);
 	   // Now sends the program and is read by server
-
+	   free(response);
 	   void *buffer = 0;
 	   programLength = parser_getAnSISOPFromFile(program, &buffer);
 
@@ -325,6 +334,9 @@ void connectToKernel(char * program){
 	   	aux->kernelSocket = sockfd;
 	   	aux->processId = startResponse->pid;
 	   	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
+
+	   	free(startResponse);
+
 	   	list_add(processList , aux);
 	   	int iterations = 0;
 	   	int newThreadIndex = getIndexFromTid(aux->threadID);
