@@ -129,6 +129,8 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	memcpy(buffer, programStart, headerPlusProgramLengthSize);
 	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
 	send(fd, buffer, totalSize, 0);
+	free(programStart);
+	free(buffer);
 }
 
 void ipc_sendStartProgramResponse(int fd, uint32_t pid) {
@@ -164,6 +166,12 @@ void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
 	void *buffer = malloc(totalSize);
 	memcpy(buffer, programFinish, totalSize);
 	send(fd, buffer, totalSize, 0);
+
+	free(programFinish);
+	free(buffer);
+
+
+
 }
 
 void ipc_client_requestNewPage(int fd, uint32_t pid) {
