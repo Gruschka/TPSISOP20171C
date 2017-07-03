@@ -618,31 +618,31 @@ int main(int argc, char **argv) {
 	}
 
 	{ // Tests
-		int a = mem_initProcess(0, 10);
-		int b = mem_initProcess(1, 10);
-		int c = mem_initProcess(2, 10);
-		int d = mem_initProcess(0, 1);
-
-		char *texto = "esto es una prueba capo";
-		int a1 = mem_write(0, 0, 0, 24, texto);
-		int a2 = mem_write(0, 9, 0, 24, texto);
-		int a3 = mem_write(1, 2, 0, 24, texto);
-		int a4 = mem_write(0, 10, 0, 24, texto);
-
-		char *meTraje1 = mem_read(0, 0, 0, 24);
-		char *meTraje2 = mem_read(0, 9, 0, 24);
-		char *meTraje3 = mem_read(1, 2, 0, 24);
-		char *meTraje4 = mem_read(0, 10, 0, 24);
-
-		int b1 = mem_addPagesToProcess(0, 1);
-		int b2 = mem_write(0, 10, 0, 24, texto);
-		char *b3 = mem_read(0, 10, 0, 24);
-		char *b4 = mem_read(0, 11, 0, 24);
-
-		mem_deinitProcess(0);
-
-		char *c1 = mem_read(0, 0, 0, 24);
-		char *c2 = mem_read(1, 2, 0, 24);
+//		int a = mem_initProcess(0, 10);
+//		int b = mem_initProcess(1, 10);
+//		int c = mem_initProcess(2, 10);
+//		int d = mem_initProcess(0, 1);
+//
+//		char *texto = "esto es una prueba capo";
+//		int a1 = mem_write(0, 0, 0, 24, texto);
+//		int a2 = mem_write(0, 9, 0, 24, texto);
+//		int a3 = mem_write(1, 2, 0, 24, texto);
+//		int a4 = mem_write(0, 10, 0, 24, texto);
+//
+//		char *meTraje1 = mem_read(0, 0, 0, 24);
+//		char *meTraje2 = mem_read(0, 9, 0, 24);
+//		char *meTraje3 = mem_read(1, 2, 0, 24);
+//		char *meTraje4 = mem_read(0, 10, 0, 24);
+//
+//		int b1 = mem_addPagesToProcess(0, 1);
+//		int b2 = mem_write(0, 10, 0, 24, texto);
+//		char *b3 = mem_read(0, 10, 0, 24);
+//		char *b4 = mem_read(0, 11, 0, 24);
+//
+//		mem_deinitProcess(0);
+//
+//		char *c1 = mem_read(0, 0, 0, 24);
+//		char *c2 = mem_read(1, 2, 0, 24);
 	}
 
 	printf("Todo configurado y funcionando.\n\n");
