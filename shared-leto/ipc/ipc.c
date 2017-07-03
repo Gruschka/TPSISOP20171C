@@ -130,6 +130,9 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code) {
 	memcpy(buffer, programStart, headerPlusProgramLengthSize);
 	memcpy(buffer + headerPlusProgramLengthSize, code, codeLength);
 	send(fd, buffer, totalSize, 0);
+
+	free(buffer);
+	free(programStart);
 }
 
 void ipc_sendStartProgramResponse(int fd, uint32_t pid) {
