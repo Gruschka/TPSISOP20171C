@@ -1,17 +1,14 @@
 /*
  ============================================================================
  Name        : consola.c
- Author      : Hernan Canzonetta
+ Author      : Deus Vult
  Version     :
  Copyright   : Copyright
- Description : Hello World in C, Ansi-style
+ Description :
  ============================================================================
  */
 
-//Ordenados por prioridad descendente.
-//TO DO: recibir respuestas del kernel (receive)
-//TO DO: Enviar mensaje frente a desconectar consola?
-//TO DO: Ver si podemos repetir menos logica con las funciones que devuelven TID e Indice de una lista.
+
 #include "consola.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,7 +34,6 @@ int portno;
 char *serverIp = 0;
 t_list * processList;
 
-int globalPid = 0; //Pid global que se incrementa con cada hilo que se crea para poder testear finalizar hilos por pid
 
 typedef struct t_process {
 	pthread_t threadID;
@@ -46,10 +42,9 @@ typedef struct t_process {
 	struct t_process * processMemoryAddress;
 } t_process;
 
+// Senial para matar threads
 void programThread_sig_handler(int signo) {
-	write(1, "si2g", 4);
 
-	write(1, "sig", 4);
 	pthread_exit(0);
 
 }
@@ -120,7 +115,6 @@ void showMenu() {
 }
 void startProgram(char * programPath) {
 
-	int chk, rc;
 
 	printf("\nInitiating:%s\n", programPath);
 
@@ -137,9 +131,11 @@ void startProgram(char * programPath) {
 	//Create thread
 	pthread_create(&threadId, &attr, executeProgram, programPath);
 
-	printf("El tid dentro de SP es: %u", threadId);
+
 
 }
+
+
 int requestPid() {
 	int pid;
 	printf("\nEnter pid:\n");
@@ -147,6 +143,8 @@ int requestPid() {
 	return pid;
 
 }
+
+//Funcion utilizada para obtener un proceso de la lista
 t_process *getThreadfromPid(int aPid) {
 
 	t_process * aux = NULL;
@@ -165,6 +163,8 @@ t_process *getThreadfromPid(int aPid) {
 
 	return NULL;
 }
+
+//Funcion Utilizada para obtener el indice de un Thread
 int getIndexFromTid(pthread_t tid) {
 
 	t_process * aux = NULL;
@@ -184,8 +184,10 @@ int getIndexFromTid(pthread_t tid) {
 	return errorCode;
 
 }
-void endProgram(int pid) {
 
+
+void endProgram(int pid) {
+	int result;
 	if (noThreadsInExecution() == 1) {
 		printf(
 				"No threads currently in execution - End Program not available\n");
@@ -207,8 +209,7 @@ void endProgram(int pid) {
 	//Cierra el socket
 	close(threadToKill->kernelSocket);
 
-	//Mata el hilo
-	int result = pthread_kill(threadToKill, SIGUSR1);
+
 
 	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n",
 			threadToKill->processId, threadToKill->kernelSocket,
@@ -217,13 +218,13 @@ void endProgram(int pid) {
 	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
 		printf("\ncan't catch SIGUSR1\n");
 
+	//Mata el Hilo
 	result = pthread_kill(threadToKill->threadID, SIGUSR1);
 
 	if (result != 0) {
 		perror("Error: Thread not finished successfully");
 	}
 
-	printf("\n\nLLEGO CHETITO ACA\n\n");
 
 	list_remove(processList, indexOfRemovedThread);
 	free(threadToKill->processMemoryAddress);
@@ -246,6 +247,8 @@ void requestFilePath(char *filePath) {
 	//puts(filePath);
 
 }
+
+//Recibe el path del programa
 void *executeProgram(void *arg) {
 
 	char * program = (char *) arg;
@@ -304,15 +307,17 @@ void connectToKernel(char * program) {
 			sockfd);
 	log_debug(logger, "Se recibió respuesta de handshake. Success: %d",
 			response->success);
-	// Now sends the program and is read by server
+
 	free(response);
 	void *buffer = 0;
+	//Guarda el largo del programa y lo mete en buffer
 	programLength = parser_getAnSISOPFromFile(program, &buffer);
 
 	log_debug(logger, "Read file. %s. Size: %d", program, programLength);
 	dump_buffer(buffer, programLength);
+	//Envia el codigo del programa al Kernel
 	ipc_client_sendStartProgram(sockfd, programLength, buffer);
-
+	//Se le asigna pid
 	ipc_struct_program_start_response *startResponse =
 			ipc_client_receiveStartProgramResponse(sockfd);
 	aux->kernelSocket = sockfd;
@@ -336,12 +341,13 @@ void connectToKernel(char * program) {
 
 			uint32_t length;
 
+
 			recv(sockfd, &length, sizeof(uint32_t), 0);
 
 			char *messageBuffer = malloc(length);
 
 			recv(sockfd, messageBuffer, length, 0);
-
+			printf("\nProcess %u printing message \n", aux->processId);
 			log_debug(logger, "%s", messageBuffer);
 
 			free(messageBuffer);
@@ -349,21 +355,10 @@ void connectToKernel(char * program) {
 		}
 
 		if (header.operationIdentifier == PROGRAM_FINISH) {
+
 			endProgram(aux->processId);
 
 		}
-
-		printf("Hi! I'm thread %u\n", aux->threadID);
-
-		sleep(2);
-		if (iterations == 3) {
-			printf("Finishing %u\n", aux->threadID);
-
-			list_remove(processList, newThreadIndex);
-			break;
-		}
-
-		iterations++;
 
 	}
 
