@@ -27,6 +27,7 @@
 #include <ipc/ipc.h>
 #include <signal.h>
 #include <pthread.h>
+#include <time.h>
 
 t_config *consoleConfig;
 t_log *logger;
@@ -38,7 +39,8 @@ t_list * processList;
 typedef struct t_process {
 	pthread_t threadID;
 	uint32_t processId;
-	int kernelSocket;
+	int kernelSocket,consoleImpressions;
+	time_t startTime,endTime;
 	struct t_process * processMemoryAddress;
 } t_process;
 
@@ -188,19 +190,23 @@ int getIndexFromTid(pthread_t tid) {
 
 void endProgram(int pid) {
 	int result;
+
 	if (noThreadsInExecution() == 1) {
-		printf(
-				"No threads currently in execution - End Program not available\n");
+		printf("No threads currently in execution - End Program not available\n");
 		return; //Si no hay hilos en ejecucion corta
 	}
 
 	t_process *threadToKill = getThreadfromPid(pid);
 
+
 	if (getThreadfromPid(pid) == NULL) {
-		printf(
-				"No thread with such pid could be found - End Program aborted\n");
+		printf("No thread with such pid could be found - End Program aborted\n");
 		return; //Si el pid ingresado no existe dentro de la lista de procesos
 	}
+
+
+	//Saves the time on which the process was forced to stop executio (considering the instant previous to send the finish program notification).
+	threadToKill->endTime = time(NULL);
 
 	int indexOfRemovedThread = getIndexFromTid(threadToKill->threadID);
 	ipc_client_sendFinishProgram(threadToKill->kernelSocket,
@@ -215,6 +221,8 @@ void endProgram(int pid) {
 			threadToKill->processId, threadToKill->kernelSocket,
 			threadToKill->threadID);
 
+	showFinishedThreadInfo(threadToKill);
+
 	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
 		printf("\ncan't catch SIGUSR1\n");
 
@@ -224,7 +232,6 @@ void endProgram(int pid) {
 	if (result != 0) {
 		perror("Error: Thread not finished successfully");
 	}
-
 
 	list_remove(processList, indexOfRemovedThread);
 	free(threadToKill->processMemoryAddress);
@@ -301,6 +308,9 @@ void connectToKernel(char * program) {
 		exit(1);
 	}
 
+	//Saves the time on which process starts executing (considering the instant after it is connected to the Kernel)
+	aux->startTime = time(NULL);
+
 	// Send handshake and wait for response
 	ipc_client_sendHandshake(CONSOLE, sockfd);
 	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(
@@ -332,7 +342,7 @@ void connectToKernel(char * program) {
 
 	//TODO: Receive actual information from kernel and print it in console
 	while (1) {
-
+		/*
 		ipc_header header;
 
 		recv(sockfd, &header, sizeof(ipc_header), 0);
@@ -351,17 +361,40 @@ void connectToKernel(char * program) {
 			log_debug(logger, "%s", messageBuffer);
 
 			free(messageBuffer);
+			aux->consoleImpressions ++;
 
 		}
 
+		//If the Kernel console requests to finish a program
 		if (header.operationIdentifier == PROGRAM_FINISH) {
 
+			//endProgram automatically saves the endTime of the process so theres no need to save it here.
 			endProgram(aux->processId);
 
-		}
+
+		}*/
+
+		printf("Hi! I'm thread %u\n", aux->threadID);
+
+		   sleep(5);
+		   if (iterations == 3) {
+		    printf("Finishing %u\n", aux->threadID);
+		    //endProgram(aux->processId);
+
+		    break;
+		    }
+
+		   iterations++;
 
 	}
 
+	//Saves process end time in case it finishes it execution normally
+	aux->endTime = time(NULL);
+
+	//Shows time info
+	showFinishedThreadInfo(aux);
+
+	//Frees reserved memory
 	free(aux);
 	return;
 }
@@ -442,3 +475,16 @@ int noThreadsInExecution() {
 	return 0;
 }
 
+void showFinishedThreadInfo(t_process * aProcess){
+
+	printf("\n\n***************************************************************************************\n");
+	printf("Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
+	printf("Program started execution at: %s",ctime(&aProcess->startTime));
+	printf("Program finished execution at: %s",ctime(&aProcess->endTime));
+	printf("The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
+	printf("This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
+	printf("***************************************************************************************\n");
+
+	return;
+
+}
