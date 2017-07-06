@@ -332,9 +332,12 @@ void connectToKernel(char * program) {
 			ipc_client_receiveStartProgramResponse(sockfd);
 	aux->kernelSocket = sockfd;
 	aux->processId = startResponse->pid;
+	aux->consoleImpressions = 0;
 	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
 
 	free(startResponse);
+
+	free(buffer);
 
 	list_add(processList, aux);
 	int iterations = 0;
@@ -425,7 +428,7 @@ int parser_getAnSISOPFromFile(char *name, void **buffer) {
 	//Read file contents into buffer
 	fread(*buffer, fileLen, 1, file);
 	fclose(file);
-	free(*buffer);
+
 	//Do whatever with buffer
 	return fileLen;
 }
@@ -477,6 +480,7 @@ int noThreadsInExecution() {
 
 void showFinishedThreadInfo(t_process * aProcess){
 
+	/*
 	printf("\n\n***************************************************************************************\n");
 	printf("Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
 	printf("Program started execution at: %s",ctime(&aProcess->startTime));
@@ -484,6 +488,12 @@ void showFinishedThreadInfo(t_process * aProcess){
 	printf("The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
 	printf("This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 	printf("***************************************************************************************\n");
+	 */
+	log_info(logger, "Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
+	log_info(logger, "Program started execution at: %s",ctime(&aProcess->startTime));
+	log_info(logger, "Program finished execution at: %s",ctime(&aProcess->endTime));
+	log_info(logger, "The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
+	log_info(logger, "This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 
 	return;
 
