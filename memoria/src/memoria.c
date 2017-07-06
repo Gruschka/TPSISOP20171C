@@ -8,7 +8,6 @@
  ============================================================================
  */
 
-// TODO: dar un máximo de cache para cada proceso
 // TODO: integración con IPC
 // TODO: consola: falta dar size de un proceso en particular (¿a qué se refiere?)
 
@@ -20,6 +19,7 @@
 #include <time.h>
 #include <commons/config.h>
 #include <commons/log.h>
+#include <pthread.h>
 
 typedef unsigned char mem_bool;
 static u_int32_t k_connectionPort;
@@ -244,6 +244,36 @@ mem_cached_page_entry *cache_getEntryPointerOrLRUEntryPointer(int32_t processID,
 	mem_cached_page_entry *existingEntry = cache_getEntryPointer(processID, processPageNumber);
 	if (existingEntry != NULL) { return existingEntry; }
 
+	// Averiguamos cuántas entradas ya tiene en cache el proceso
+	mem_cached_page_entry *randomEntryForProcess = NULL;
+	int numberOfCachedPagesForProcess = 0;
+	{
+		int i;
+		for (i = 0; i < k_numberOfEntriesInCache; i++) {
+			mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+			if (entry->processID == processID) {
+				numberOfCachedPagesForProcess++;
+				randomEntryForProcess = entry;
+			}
+		}
+	}
+
+	if (numberOfCachedPagesForProcess >= k_maxPagesForEachProcessInCache) {
+		// El proceso ya llegó al máximo, por lo tanto agarramos el LRU
+		// dentro del subset de páginas que ya tiene el proceso
+		mem_cached_page_entry *lruEntry = randomEntryForProcess;
+		int i;
+		for (i = 1; i < k_numberOfEntriesInCache; i++) {
+			mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+			if (entry->processID == processID && entry->lruCounter < lruEntry->lruCounter) {
+				lruEntry = entry;
+			}
+		}
+		return lruEntry;
+	}
+
+	// Si llegamos a este punto es porque el proceso no excedió su límite
+	// de entradas en cache, y se le otorgará la página según LRU global
 	mem_cached_page_entry *lruEntry = cache_getEntryPointerForIndex(0);
 	int i;
 	for (i = 1; i < k_numberOfEntriesInCache; i++) {
@@ -279,6 +309,10 @@ void *cache_read(int32_t processID, int32_t processPageNumber) {
 //////// Interfaz pública
 
 int mem_initProcess(int32_t processID, int32_t numberOfPages) {
+	if (numberOfPages == 0) {
+		return 0;
+	}
+
 	if (isProcessAlreadyInitialized(processID)) {
 		return 0;
 	}
