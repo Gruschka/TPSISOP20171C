@@ -10,7 +10,7 @@
 
 // TODO: dar un máximo de cache para cada proceso
 // TODO: integración con IPC
-// TODO: consola de la memoria
+// TODO: consola: falta dar size de un proceso en particular (¿a qué se refiere?)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -401,6 +401,25 @@ void mem_deinitProcess(int32_t processID) {
 
 //////// Fin de interfaz pública
 
+//////// Log de size
+
+void size_logMemorySize() {
+	int numberOfUsedFrames = k_numberOfFrames - k_numberOfPages;
+	int i;
+	for (i = 0; i < k_numberOfPages; i++) {
+		mem_page_entry *entry = getPageEntryPointerForIndex(i);
+		if (entry->processID != -1) {
+			numberOfUsedFrames++;
+		}
+	}
+
+	int numberOfAvailableFrames = k_numberOfFrames - numberOfUsedFrames;
+
+	printf("Frames totales: %d; Frames utilizados: %d; Frames disponibles: %d. \n\n", k_numberOfFrames, numberOfUsedFrames, numberOfAvailableFrames);
+}
+
+//////// Fin de log de size
+
 //////// Dumps
 
 void dump_cache() {
@@ -410,7 +429,7 @@ void dump_cache() {
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
-		char *buffer = malloc(k_frameSize);
+		char *buffer = malloc(k_frameSize + 1);
 		memcpy(buffer, entry->pageContentPointer, k_frameSize);
 
 		int j;
@@ -419,6 +438,7 @@ void dump_cache() {
 				buffer[j] = '-';
 			}
 		}
+		buffer[k_frameSize] = '\0';
 
 		log_info(log, "(Entrada de cache n° %d) processID: %d; processPageNumber: %d; lruCounter: %d; pageContent: %s", i, entry->processID, entry->processPageNumber, entry->lruCounter, buffer);
 
@@ -457,7 +477,7 @@ void dump_pagesContentForProcess(u_int32_t processID) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
 		if (entry->processID == processID) {
 			void *frame = getFramePointerForPageIndex(i);
-			char *buffer = malloc(k_frameSize);
+			char *buffer = malloc(k_frameSize + 1);
 			memcpy(buffer, frame, k_frameSize);
 
 			int j;
@@ -466,6 +486,7 @@ void dump_pagesContentForProcess(u_int32_t processID) {
 					buffer[j] = '-';
 				}
 			}
+			buffer[k_frameSize] = '\0';
 
 			log_info(log, "(Virtual Page n° %d) pageContent: %s", entry->processPageNumber, buffer);
 			free(buffer);
@@ -486,6 +507,13 @@ void dump_assignedPagesContent() {
 //////// Fin de dumps
 
 //////// Comienzo de consola
+
+void menu_dumpSpecificProcessPagesContents() {
+	printf("Introduzca el processID del proceso para el cual desea dumpear sus contenidos de memoria: \n> ");
+	int processID = 0;
+	scanf("%d", &processID);
+	dump_pagesContentForProcess(processID);
+}
 
 void menu_configurePhysicalMemoryDelay() {
 	int newDelay = 0;
@@ -510,14 +538,26 @@ void menu_dump() {
 		case 1: dump_cache(); break;
 		case 2: dump_pageEntriesAndActiveProcesses(); break;
 		case 3: dump_assignedPagesContent(); break;
-		case 4: printf("TODO: dumpear contenido de la memoria para un proceso en particular.\n\n"); break;
+		case 4: menu_dumpSpecificProcessPagesContents(); break;
 		default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
 		}
 	} while (optionIndex > 3);
 }
 
 void menu_flush() {
-	printf("TODO: flushear cache.\n\n");
+	int i;
+	for (i = 0; i < k_numberOfEntriesInCache; i++) {
+		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+		entry->processID = -1;
+		entry->processPageNumber = -1;
+		entry->lruCounter = 0;
+		char *pageContentPointer = entry->pageContentPointer;
+		int j;
+		for (j = 0; j < k_frameSize; j++) {
+			pageContentPointer[j] = '\0';
+		}
+	}
+	printf("Se ha limpiado la memoria cache.\n\n");
 }
 
 void menu_size() {
@@ -527,7 +567,7 @@ void menu_size() {
 			scanf("%d", &optionIndex);
 			switch (optionIndex) {
 			case 0: printf("Se canceló la consulta de tamaño.\n\n"); break;
-			case 1: printf("TODO: imprimir tamaño de la memoria (frames libres y frames ocupados).\n\n"); break;
+			case 1: size_logMemorySize(); break;
 			case 2: printf("TODO: pedir processID y dar el tamaño que ocupa.\n\n"); break;
 			default: printf("Opción inválida, vuelva a intentar.\n\n"); break;
 			}

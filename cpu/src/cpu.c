@@ -314,6 +314,9 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
 int cpu_sharedVariableGet(char *identifier){
 	printf("sharedVariableGet identifier: %s\n", identifier);
 	ipc_client_sendGetSharedVariable(myCPU.connections[T_KERNEL].socketFileDescriptor,identifier);
+	int value = ipc_client_waitSharedVariableValue(myCPU.connections[T_KERNEL].socketFileDescriptor);
+	printf("global variable value: %d", value);
+	return value;
 }
 int cpu_sharedVariableSet(char *identifier, int value){
 	printf("sharedVariableSet");
