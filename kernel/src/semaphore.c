@@ -29,7 +29,7 @@ int kernel_semaphore_wait(kernel_semaphore *semaphore, t_PCB *pcb) {
 }
 
 int kernel_semaphore_signal(kernel_semaphore *semaphore, t_PCB *pcb) {
-	if (semaphore->count < 0) {
+	if (semaphore->count == 0) {
 		// aca tengo que desbloquear 1 proceso de la cola
 		t_PCB *pcb = queue_pop(semaphore->__waitList);
 

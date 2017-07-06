@@ -18,7 +18,7 @@ typedef void (*SemaphoreDidWakeupProcessFunction)(t_PCB *pcb);
 
 typedef struct kernel_semaphore {
 	char *identifier;
-	int count;
+	uint32_t count;
 	t_queue *__waitList;
 } kernel_semaphore;
 
