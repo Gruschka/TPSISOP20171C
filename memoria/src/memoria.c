@@ -316,7 +316,7 @@ void *cache_read(int32_t processID, int32_t processPageNumber) {
 //////// Interfaz pública
 
 int mem_initProcess(int32_t processID, int32_t numberOfPages) {
-	pthread_rwlock_rdlock(physicalMemoryRwlock);
+	pthread_rwlock_wrlock(physicalMemoryRwlock);
 
 	if (numberOfPages == 0) {
 		return 0;
