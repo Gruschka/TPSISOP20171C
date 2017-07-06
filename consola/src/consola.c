@@ -425,7 +425,6 @@ int parser_getAnSISOPFromFile(char *name, void **buffer) {
 	//Read file contents into buffer
 	fread(*buffer, fileLen, 1, file);
 	fclose(file);
-	free(*buffer);
 	//Do whatever with buffer
 	return fileLen;
 }
