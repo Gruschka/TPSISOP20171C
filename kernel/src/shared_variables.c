@@ -53,12 +53,12 @@ int setSharedVariableValue(char *identifier, uint32_t value) {
 	}
 }
 
-uint32_t getSharedVariableValue(char *identifier) {
+int getSharedVariableValue(char *identifier) {
 	shared_variable *foundVariable = getSharedVariable(identifier);
 
 	if (foundVariable != NULL) {
 		pthread_mutex_lock(&foundVariable->mutex);
-		uint32_t value = foundVariable->value;
+		int value = foundVariable->value;
 		pthread_mutex_unlock(&foundVariable->mutex);
 		return value;
 	}

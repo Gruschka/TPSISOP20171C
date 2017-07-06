@@ -59,9 +59,11 @@ void testMemory() {
 	shared_variable *a = createSharedVariable("A");
 	shared_variable *b = createSharedVariable("B");
 	shared_variable *c = createSharedVariable("C");
+	shared_variable *global = createSharedVariable("Global");
 	list_add(sharedVariables, a);
 	list_add(sharedVariables, b);
 	list_add(sharedVariables, c);
+	list_add(sharedVariables, global);
 
 	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
 			getSharedVariableValue("A"), getSharedVariableValue("B"),
@@ -70,6 +72,7 @@ void testMemory() {
 	setSharedVariableValue("A", 1);
 	setSharedVariableValue("B", 2);
 	setSharedVariableValue("C", 3);
+	setSharedVariableValue("Global", 112);
 
 	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
 			getSharedVariableValue("A"), getSharedVariableValue("B"),
@@ -160,6 +163,7 @@ void fetchConfiguration() {
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
 }
 
+///////////////////////////// Consoles server /////////////////////////////////
 void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
@@ -219,7 +223,7 @@ void consolesServerSocket_handleDisconnection(int fd) {
 	// los finalizo y les pongo el exit code de desconexión
 }
 
-///////////////////////////// CPUs SERVER /////////////////////////////////
+///////////////////////////// CPUs server /////////////////////////////////
 void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
