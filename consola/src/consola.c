@@ -428,7 +428,10 @@ int parser_getAnSISOPFromFile(char *name, void **buffer) {
 	//Read file contents into buffer
 	fread(*buffer, fileLen, 1, file);
 	fclose(file);
+<<<<<<< HEAD
 
+=======
+>>>>>>> branch 'master' of https://github.com/sisoputnfrba/tp-2017-1c-Deus-Vult.git
 	//Do whatever with buffer
 	return fileLen;
 }
