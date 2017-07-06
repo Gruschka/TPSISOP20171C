@@ -47,6 +47,9 @@ void *scheduler_mainFunction(void);
 void *dispatcher_mainFunction(void);
 void *configurationWatcherThread_mainFunction();
 
+void semaphoreDidBlockProcess(t_PCB *pcb);
+void semaphoreDidWakeProcess(t_PCB *pcb);
+
 void executeNewProgram(t_PCB *pcb);
 t_PCB *createPCBFromScript(char *script);
 

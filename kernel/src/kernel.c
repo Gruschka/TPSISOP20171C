@@ -27,6 +27,7 @@
 #include <commons/config.h>
 #include <commons/log.h>
 #include <parser/metadata_program.h>
+#include "semaphore.h"
 
 #define EVENT_SIZE  ( sizeof (struct inotify_event) )
 #define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
@@ -50,6 +51,23 @@ uint32_t lastPID = 1;
 uint32_t pageSize = 256;
 
 int memory_sockfd;
+
+// function pointers for kernel semaphore implementation
+SemaphoreDidBlockProcessFunction semaphoreDidBlockProcessFunction;
+SemaphoreDidWakeupProcessFunction semaphoreDidWakeupProcessFunction;
+
+//TODO: implement semaphore block process callback
+void semaphoreDidBlockProcess(t_PCB *pcb){
+	printf("semaphoreDidBlockProcess %d\n",pcb->pid);
+	fflush(stdout);
+}
+
+//TODO: implement semaphore wake process callback
+void semaphoreDidWakeProcess(t_PCB *pcb){
+	printf("semaphoreDidBlockProcess %d\n",pcb->pid);
+	fflush(stdout);
+}
+
 
 void testMemory() {
 	void *page = memory_createPage(pageSize);
@@ -156,6 +174,33 @@ int main(int argc, char **argv) {
 	}
 
 	fetchConfiguration();
+
+	// KERNEL SEMAPHORE TEST START
+	// TODO: remove semaphore test
+	// function pointer initialization
+	semaphoreDidBlockProcessFunction = &semaphoreDidBlockProcess;
+	semaphoreDidWakeupProcessFunction = &semaphoreDidWakeProcess;
+
+	// semaphores init
+	kernel_semaphores_init(semaphoreDidBlockProcessFunction,semaphoreDidWakeupProcessFunction);
+
+	// generate test semaphore & pcb
+	t_PCB * dummyPCB = malloc(sizeof(t_PCB));
+	dummyPCB->pid =1;
+	char *semaphoreId = malloc(sizeof(char)*2);
+	sprintf(semaphoreId,"a\0");
+	kernel_semaphore *testSemaphore = kernel_semaphore_make(semaphoreId,1); // 1 instance
+
+	// 2 consumptions -> block
+	kernel_semaphore_wait(testSemaphore,dummyPCB);
+	kernel_semaphore_wait(testSemaphore,dummyPCB);
+
+	// 1 release -> wake
+	kernel_semaphore_signal(testSemaphore,dummyPCB);
+
+	//destroy semaphore
+	kernel_semaphore_destroy(testSemaphore);
+	// KERNEL SEMAPHORE TEST END
 
 	newQueue = newQueue_create();
 	readyQueue = readyQueue_create();

@@ -8,7 +8,6 @@
  ============================================================================
  */
 
-// TODO: dar un máximo de cache para cada proceso
 // TODO: integración con IPC
 // TODO: consola: falta dar size de un proceso en particular (¿a qué se refiere?)
 
@@ -28,6 +27,9 @@
 
 t_log *logger;
 
+pthread_rwlock_t physicalMemoryRwlock;
+pthread_rwlock_t cacheMemoryRwlock;
+
 typedef unsigned char mem_bool;
 static u_int32_t k_connectionPort;
 static u_int32_t k_numberOfPages;
@@ -39,7 +41,7 @@ void millisleep(u_int32_t milliseconds) {
 	nanosleep(&ts, NULL);
 }
 
-//////// Fin de código de memoria física
+//////// Comienzo de código de memoria física
 
 typedef struct mem_page_entry {
     int32_t processID;
@@ -251,6 +253,36 @@ mem_cached_page_entry *cache_getEntryPointerOrLRUEntryPointer(int32_t processID,
 	mem_cached_page_entry *existingEntry = cache_getEntryPointer(processID, processPageNumber);
 	if (existingEntry != NULL) { return existingEntry; }
 
+	// Averiguamos cuántas entradas ya tiene en cache el proceso
+	mem_cached_page_entry *randomEntryForProcess = NULL;
+	int numberOfCachedPagesForProcess = 0;
+	{
+		int i;
+		for (i = 0; i < k_numberOfEntriesInCache; i++) {
+			mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+			if (entry->processID == processID) {
+				numberOfCachedPagesForProcess++;
+				randomEntryForProcess = entry;
+			}
+		}
+	}
+
+	if (numberOfCachedPagesForProcess >= k_maxPagesForEachProcessInCache) {
+		// El proceso ya llegó al máximo, por lo tanto agarramos el LRU
+		// dentro del subset de páginas que ya tiene el proceso
+		mem_cached_page_entry *lruEntry = randomEntryForProcess;
+		int i;
+		for (i = 1; i < k_numberOfEntriesInCache; i++) {
+			mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
+			if (entry->processID == processID && entry->lruCounter < lruEntry->lruCounter) {
+				lruEntry = entry;
+			}
+		}
+		return lruEntry;
+	}
+
+	// Si llegamos a este punto es porque el proceso no excedió su límite
+	// de entradas en cache, y se le otorgará la página según LRU global
 	mem_cached_page_entry *lruEntry = cache_getEntryPointerForIndex(0);
 	int i;
 	for (i = 1; i < k_numberOfEntriesInCache; i++) {
@@ -263,21 +295,26 @@ mem_cached_page_entry *cache_getEntryPointerOrLRUEntryPointer(int32_t processID,
 }
 
 void cache_write(int32_t processID, int32_t processPageNumber, void *pageContentPointer) {
+	pthread_rwlock_wrlock(&cacheMemoryRwlock);
 	mem_cached_page_entry *entry = cache_getEntryPointerOrLRUEntryPointer(processID, processPageNumber);
 	entry->processID = processID;
 	entry->processPageNumber = processPageNumber;
 	entry->lruCounter = cache_currentCacheLRUCounter + 1;
 	cache_currentCacheLRUCounter = entry->lruCounter;
 	memcpy(entry->pageContentPointer, pageContentPointer, k_frameSize);
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
 }
 
 void *cache_read(int32_t processID, int32_t processPageNumber) {
+	pthread_rwlock_wrlock(&cacheMemoryRwlock);
 	mem_cached_page_entry *entry = cache_getEntryPointer(processID, processPageNumber);
-	if (entry == NULL) { return NULL; }
+	if (entry == NULL) { pthread_rwlock_unlock(&cacheMemoryRwlock); return NULL; }
+
 	entry->lruCounter = cache_currentCacheLRUCounter + 1;
 	cache_currentCacheLRUCounter = entry->lruCounter;
 	void *buffer = malloc(k_frameSize);
 	memcpy(buffer, entry->pageContentPointer, k_frameSize);
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
 	return buffer;
 }
 
@@ -286,11 +323,20 @@ void *cache_read(int32_t processID, int32_t processPageNumber) {
 //////// Interfaz pública
 
 int mem_initProcess(int32_t processID, int32_t numberOfPages) {
+	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+
+	if (numberOfPages == 0) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
+		return 0;
+	}
+
 	if (isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
 	if (!hasMemoryAvailablePages(numberOfPages)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
@@ -299,15 +345,21 @@ int mem_initProcess(int32_t processID, int32_t numberOfPages) {
 		assignPageToProcess(processID, i);
 	}
 
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
+
 	return 1;
 }
 
 void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int32_t size) {
+	pthread_rwlock_rdlock(&physicalMemoryRwlock);
+
 	if (!isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return NULL;
 	}
 
 	if (!areOffsetAndSizeValid(offset, size)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return NULL;
 	}
 
@@ -317,13 +369,14 @@ void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int
 	if (cache != NULL) {
 		void *buffer = malloc(size);
 		memcpy(buffer, cache, size);
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return buffer;
 	}
 
 	// Si no estaban en la cache, los vamos a buscar a
 	// la memoria física
 	int pageIndex = findPageIndex(processID, processPageNumber);
-	if (pageIndex == -1) { return NULL; }
+	if (pageIndex == -1) { pthread_rwlock_unlock(&physicalMemoryRwlock); return NULL; }
 
 	void *frame = getFramePointerForPageIndex(pageIndex);
 
@@ -335,21 +388,27 @@ void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int
 	void *buffer = malloc(size);
 	memcpy(buffer, pointer, size);
 	millisleep(k_physicalMemoryAccessDelay);
+
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 	return buffer;
 }
 
 int mem_write(int32_t processID, int32_t processPageNumber, int32_t offset, int32_t size, void *buffer) {
+	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+
 	if (!isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
 	if (!areOffsetAndSizeValid(offset, size)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
 	// Si la página no existe, devolvemos error.
 	int pageIndex = findPageIndex(processID, processPageNumber);
-	if (pageIndex == -1) { return 0; }
+	if (pageIndex == -1) { pthread_rwlock_unlock(&physicalMemoryRwlock); return 0; }
 	void *frame = getFramePointerForPageIndex(pageIndex);
 
 	// Si existe, escribimos los datos
@@ -360,15 +419,25 @@ int mem_write(int32_t processID, int32_t processPageNumber, int32_t offset, int3
 	// Luego guardamos el frame en la cache
 	cache_write(processID, processPageNumber, frame);
 
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 	return 1;
 }
 
 int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
+	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+
+	if (numberOfPages == 0) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
+		return 0;
+	}
+
 	if (!isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
 	if (!hasMemoryAvailablePages(numberOfPages)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return 0;
 	}
 
@@ -379,10 +448,14 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 		assignPageToProcess(processID, pagesOriginallyOwned + i);
 	}
 
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
+
 	return 1;
 }
 
 void mem_deinitProcess(int32_t processID) {
+	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+
 	// Primero destruimos las entradas de las páginas
 	// de la memoria física
 	int i;
@@ -404,6 +477,8 @@ void mem_deinitProcess(int32_t processID) {
 			entry->lruCounter = 0;
 		}
 	}
+
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
 //////// Fin de interfaz pública
@@ -411,6 +486,8 @@ void mem_deinitProcess(int32_t processID) {
 //////// Log de size
 
 void size_logMemorySize() {
+	pthread_rwlock_rdlock(&physicalMemoryRwlock);
+
 	int numberOfUsedFrames = k_numberOfFrames - k_numberOfPages;
 	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
@@ -423,6 +500,7 @@ void size_logMemorySize() {
 	int numberOfAvailableFrames = k_numberOfFrames - numberOfUsedFrames;
 
 	printf("Frames totales: %d; Frames utilizados: %d; Frames disponibles: %d. \n\n", k_numberOfFrames, numberOfUsedFrames, numberOfAvailableFrames);
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
 //////// Fin de log de size
@@ -430,6 +508,7 @@ void size_logMemorySize() {
 //////// Dumps
 
 void dump_cache() {
+	pthread_rwlock_rdlock(&cacheMemoryRwlock);
 	char *logPath = "./src/cache_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
 
@@ -453,9 +532,11 @@ void dump_cache() {
 	}
 
 	log_destroy(log);
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
 }
 
 void dump_pageEntriesAndActiveProcesses() {
+	pthread_rwlock_rdlock(&physicalMemoryRwlock);
 	char *logPath = "./src/pages_table_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
 
@@ -472,9 +553,11 @@ void dump_pageEntriesAndActiveProcesses() {
 	}
 
 	log_destroy(log);
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
 void dump_pagesContentForProcess(u_int32_t processID) {
+	pthread_rwlock_rdlock(&physicalMemoryRwlock);
 	char *logPath = "./src/process_memory_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
 
@@ -501,14 +584,17 @@ void dump_pagesContentForProcess(u_int32_t processID) {
 	}
 
 	log_destroy(log);
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
 void dump_assignedPagesContent() {
+	pthread_rwlock_rdlock(&physicalMemoryRwlock);
 	int *processesIDs = activeProcessesIDs();
 	int i;
 	for (i = 0; *(processesIDs + i) != -1; i++) {
 		dump_pagesContentForProcess(*(processesIDs + i));
 	}
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
 //////// Fin de dumps
@@ -552,6 +638,7 @@ void menu_dump() {
 }
 
 void menu_flush() {
+	pthread_rwlock_wrlock(&cacheMemoryRwlock);
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
 		mem_cached_page_entry *entry = cache_getEntryPointerForIndex(i);
@@ -565,6 +652,7 @@ void menu_flush() {
 		}
 	}
 	printf("Se ha limpiado la memoria cache.\n\n");
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
 }
 
 void menu_size() {
@@ -586,11 +674,13 @@ void menu_size() {
 void *serverThread_main(void *);
 
 int main(int argc, char **argv) {
-	{
-		char *logPath = "./src/debug.txt";
-		logger = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
+	pthread_rwlock_init(&physicalMemoryRwlock, NULL);
+	pthread_rwlock_init(&cacheMemoryRwlock, NULL);
 
-		// Configuración
+	char *logPath = "./src/debug.txt";
+	logger = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
+
+	{ // Configuración
 		char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
 		printf("Levantando configuración del archivo '%s'.\n", configPath);
 		t_config *config = config_create(configPath);
@@ -679,6 +769,9 @@ int main(int argc, char **argv) {
 			}
 		} while (optionIndex != 0);
 	}
+
+	pthread_rwlock_destroy(&physicalMemoryRwlock);
+	pthread_rwlock_destroy(&cacheMemoryRwlock);
 
 	return EXIT_SUCCESS;
 }

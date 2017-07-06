@@ -20,7 +20,6 @@ typedef struct kernel_semaphore {
 	char *identifier;
 	uint32_t count;
 	t_queue *__waitList;
-	sem_t __sem;
 } kernel_semaphore;
 
 void kernel_semaphores_init(
@@ -28,6 +27,7 @@ void kernel_semaphores_init(
 		SemaphoreDidWakeupProcessFunction semaphoreDidWakeupProcessFunction);
 
 kernel_semaphore *kernel_semaphore_make(char *identifier, int value);
+int kernel_semaphore_destroy(kernel_semaphore *semaphore);
 int kernel_semaphore_wait(kernel_semaphore *semaphore, t_PCB *pcb);
 int kernel_semaphore_signal(kernel_semaphore *semaphore, t_PCB *pcb);
 

@@ -32,6 +32,7 @@ int kernel_semaphore_signal(kernel_semaphore *semaphore, t_PCB *pcb) {
 	if (semaphore->count == 0) {
 		// aca tengo que desbloquear 1 proceso de la cola
 		t_PCB *pcb = queue_pop(semaphore->__waitList);
+
 		_semaphoreDidWakeupProcessFunction(pcb);
 		return semaphore->count++;
 	}
@@ -45,7 +46,20 @@ kernel_semaphore *kernel_semaphore_make(char *identifier, int value) {
 	semaphore->count = value;
 	semaphore->identifier = identifier;
 	semaphore->__waitList = queue_create();
-	sem_init(&(semaphore->__sem), 0, 0);
 
 	return semaphore;
+}
+
+int kernel_semaphore_destroy(kernel_semaphore *semaphore){
+	semaphore->count = 0;
+	if (semaphore->identifier) free(semaphore->identifier);
+	int queueIterator = 0;
+	// TODO: implement queue_clean_and_destroy_elements(queue,function pointer)
+	// with pcb_destroy(pcb)
+	while (queueIterator < queue_size(semaphore->__waitList)){
+		t_PCB* pcb = queue_pop(semaphore->__waitList);
+		free(pcb);
+		queueIterator++;
+	}
+	return EXIT_SUCCESS;
 }
