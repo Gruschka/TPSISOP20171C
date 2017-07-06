@@ -20,6 +20,7 @@ void ipc_client_sendStartProgram(int fd, uint32_t codeLength, void *code);
 void ipc_client_sendFinishProgram(int fd, uint32_t pid);
 ipc_struct_program_start_response *ipc_client_receiveStartProgramResponse(int fd);
 void ipc_client_sendGetSharedVariable(int fd, char *identifier);
+void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset, int size, void *buffer);
 
 // Server
 int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandler, EpollDisconnectionEventHandler disconnectionHandler, EpollDeserializedStructEventHandler deserializedStructHandler);

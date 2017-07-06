@@ -12,17 +12,21 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/inotify.h>
 #include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
 
 #include "memory.h"
 #include "scheduling.h"
 #include "shared_variables.h"
 #include <commons/config.h>
 #include <commons/log.h>
+#include <parser/metadata_program.h>
 
 #define EVENT_SIZE  ( sizeof (struct inotify_event) )
 #define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
@@ -43,7 +47,9 @@ pthread_t dispatcherThread;
 pthread_t configurationWatcherThread;
 
 uint32_t lastPID = 1;
-uint32_t pageSize = 512;
+uint32_t pageSize = 256;
+
+int memory_sockfd;
 
 void testMemory() {
 	void *page = memory_createPage(pageSize);
@@ -79,6 +85,56 @@ void testMemory() {
 			getSharedVariableValue("C"), getSharedVariableValue("D"));
 }
 
+int connectToMemory() {
+	struct sockaddr_in serv_addr;
+	struct hostent *server;
+
+	memory_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (memory_sockfd < 0) {
+		log_error(logger, "Error opening memory socket");
+		return -1;
+	}
+
+	server = gethostbyname("127.0.0.1");
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	bcopy((char *) server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+	serv_addr.sin_port = htons(8888);
+
+
+	if (connect(memory_sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
+		log_error(logger, "Error connecting to memory");
+		return -1;
+	}
+
+	log_debug(logger, "Connected to memory");
+
+	return 0;
+}
+
+int memory_sendInitProgram(int pid, int numberOfPages) {
+	ipc_struct_memory_init_program request;
+	request.header.operationIdentifier = MEMORY_INIT_PROGRAM;
+
+	request.numberOfPages = numberOfPages;
+	request.pid = pid;
+
+	send(memory_sockfd, &request, sizeof(request), 0);
+
+	ipc_header responseHeader;
+	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+
+	if (responseHeader.operationIdentifier == MEMORY_INIT_PROGRAM_RESPONSE) {
+		char success;
+
+		recv(memory_sockfd, &success, sizeof(char), 0);
+		return (success != 0) ? 1 : -1;
+	}
+
+	return -1;
+}
+
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL );
 
@@ -109,10 +165,18 @@ int main(int argc, char **argv) {
 
 	testMemory();
 
+	if (connectToMemory() == -1) {
+		log_error(logger, "La memoria no está corriendo");
+		return EXIT_FAILURE;
+	} else {
+		log_debug(logger, "sigo todo bien");
+	}
+
 	int i;
 	for (i = 0; i < configuration->multiprogrammingDegree; i++) {
 		sem_post(&readyQueue_availableSpaces);
 	}
+
 
 	pthread_create(&consolesServerThread, NULL, consolesServer_main, NULL );
 	pthread_create(&cpusServerThread, NULL, cpusServer_main, NULL );
@@ -182,10 +246,18 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		codeString[programStart->codeLength] = '\0';
 		log_info(logger, "Program received. Code length: %d. Code: %s",
 				programStart->codeLength, codeString);
-		t_PCB *newProgram = malloc(sizeof(t_PCB));
+		t_PCB *newProgram = createPCBFromScript(codeString);
 		newProgram->pid = ++lastPID;
-		ipc_sendStartProgramResponse(fd, newProgram->pid);
-		executeNewProgram(newProgram);
+		if (memory_sendInitProgram(newProgram->pid, newProgram->codePages) != -1) {
+			//FIXME separar y mandar en cachos el codigo, ahora esta hardcodeado 180 de largo
+			ipc_client_sendMemoryWrite(memory_sockfd, newProgram->pid, 0, 0, 180, codeString);
+			ipc_sendStartProgramResponse(fd, newProgram->pid);
+			executeNewProgram(newProgram);
+		} else {
+			//fixme manejar error
+			log_error(logger, "Fallo el init program");
+		}
+
 		break;
 	}
 	case PROGRAM_FINISH: {
@@ -288,10 +360,11 @@ void *scheduler_mainFunction(void) {
 		pthread_mutex_lock(&newQueue_mutex);
 		t_PCB *program = newQueue_popProcess();
 		readyQueue_addProcess(program);
-		log_debug(logger, "[scheduler] new process <PID: %d> in ready q",
-				program->pid);
 		pthread_mutex_unlock(&newQueue_mutex);
 		pthread_mutex_unlock(&readyQueue_mutex);
+		log_debug(logger, "[scheduler] new process <PID: %d> in ready q",
+						program->pid);
+
 		sem_post(&readyQueue_programsCount);
 	}
 
@@ -370,4 +443,37 @@ void *configurationWatcherThread_mainFunction() {
 	}
 
 	return NULL ;
+}
+
+t_PCB *createPCBFromScript(char *script) {
+	t_PCB *PCB = malloc(sizeof(t_PCB));
+
+	// prepare PCB
+	int programLength = string_length(script);
+	t_metadata_program *program = metadata_desde_literal(script);
+
+	int codePagesCount = ceil((float)programLength / (float)pageSize);
+	int instructionCount = program->instrucciones_size;
+
+	PCB->variableSize.stackArgumentCount = 0;
+	PCB->variableSize.stackIndexRecordCount = 0;
+	PCB->variableSize.stackVariableCount = 0;
+
+	PCB->codePages = codePagesCount;
+
+	PCB->variableSize.instructionCount = instructionCount;
+	PCB->codeIndex = malloc(instructionCount * sizeof(t_codeIndex));
+	memcpy(PCB->codeIndex,program->instrucciones_serializado,instructionCount * sizeof(t_codeIndex));
+
+	PCB->variableSize.labelIndexSize = program->etiquetas_size;
+	PCB->labelIndex = malloc(program->etiquetas_size);
+	memcpy(PCB->labelIndex,program->etiquetas,program->etiquetas_size);
+
+	PCB->ec = 0;
+	PCB->filesTable = NULL;
+	PCB->pc = 0;
+	PCB->sp = PCB->codePages +1 * pageSize;
+	PCB->stackIndex = NULL;
+
+	return PCB;
 }

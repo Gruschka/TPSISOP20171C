@@ -20,6 +20,13 @@
 #include <time.h>
 #include <commons/config.h>
 #include <commons/log.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <ipc/ipc.h>
+
+t_log *logger;
 
 typedef unsigned char mem_bool;
 static u_int32_t k_connectionPort;
@@ -576,8 +583,14 @@ void menu_size() {
 
 //////// Fin de consola
 
+void *serverThread_main(void *);
+
 int main(int argc, char **argv) {
-	{ // Configuración
+	{
+		char *logPath = "./src/debug.txt";
+		logger = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
+
+		// Configuración
 		char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
 		printf("Levantando configuración del archivo '%s'.\n", configPath);
 		t_config *config = config_create(configPath);
@@ -588,6 +601,10 @@ int main(int argc, char **argv) {
 		k_maxPagesForEachProcessInCache = config_get_int_value(config, "CACHE_X_PROC");
 		k_physicalMemoryAccessDelay = config_get_int_value(config, "RETARDO_MEMORIA");
 		config_destroy(config);
+
+		// Server
+		pthread_t threadId;
+		pthread_create(&threadId, NULL, serverThread_main, NULL);
 	}
 
 	{ // Physical memory initialization
@@ -666,3 +683,111 @@ int main(int argc, char **argv) {
 	return EXIT_SUCCESS;
 }
 
+void *connection_handler(void *shit) {
+	int sockfd = *(int*)shit;
+	ipc_header header;
+
+	while (1) {
+		recv(sockfd, &header, sizeof(ipc_header), MSG_PEEK);
+
+		log_debug(logger, "Operation identifier: %d",
+				header.operationIdentifier);
+
+		switch (header.operationIdentifier) {
+		case MEMORY_INIT_PROGRAM: {
+			ipc_struct_memory_init_program request;
+			recv(sockfd, &request, sizeof(ipc_struct_memory_init_program), 0);
+			log_debug(logger, "Init program. pid: %d. numberOfPages: %d",
+					request.pid, request.numberOfPages);
+			int result = mem_initProcess(request.pid, request.numberOfPages);
+
+			ipc_struct_memory_init_program_response response;
+			response.header.operationIdentifier = MEMORY_INIT_PROGRAM_RESPONSE;
+			response.success = result > 0 ? 1 : 0;
+
+			send(sockfd, &response,
+					sizeof(ipc_struct_memory_init_program_response), 0);
+			break;
+		}
+		case MEMORY_WRITE: {
+			recv(sockfd, &header, sizeof(ipc_header), 0);
+			ipc_struct_memory_write request;
+
+			recv(sockfd, &(request.pid), sizeof(int), 0);
+			recv(sockfd, &(request.pageNumber), sizeof(int), 0);
+			recv(sockfd, &(request.offset), sizeof(int), 0);
+			recv(sockfd, &(request.size), sizeof(int), 0);
+
+			void *buffer = malloc(request.size);
+			recv(sockfd, buffer, request.size, 0);
+			request.buffer = buffer;
+
+			log_debug(logger,
+					"Write. pid: %d. pageNumber: %d. offset: %d. size: %d. buffer: %s",
+					request.pid, request.pageNumber, request.offset,
+					request.size, request.buffer);
+			int result = mem_write(request.pid, request.pageNumber, request.offset,
+					request.size, request.buffer);
+			log_debug(logger, "mem_write result: %d", result);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	return NULL;
+}
+
+void *serverThread_main(void *mierda) {
+	int socket_desc, client_sock, c;
+	struct sockaddr_in server, client;
+
+	//Create socket
+	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+	if (socket_desc == -1) {
+		log_error(logger, "No se pudo crear el socket");
+	}
+	log_debug(logger, "Se creo el socket");
+
+	//Prepare the sockaddr_in structure
+	server.sin_family = AF_INET;
+	server.sin_addr.s_addr = INADDR_ANY;
+	server.sin_port = htons(8888);
+
+	//Bind
+	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
+		//print the error message
+		log_error(logger, "Falló el bind");
+		return NULL;
+	}
+
+	//Listen
+	listen(socket_desc, 3);
+
+	//Accept and incoming connection
+	log_debug(logger, "Waiting for incoming connections...");
+	c = sizeof(struct sockaddr_in);
+
+	pthread_t thread_id;
+
+	while ((client_sock = accept(socket_desc, (struct sockaddr *) &client,
+			(socklen_t*) &c))) {
+		log_debug(logger, "Connection accepted");
+
+		if (pthread_create(&thread_id, NULL, connection_handler,
+				(void*) &client_sock) < 0) {
+			log_error(logger, "Could not create thread");
+			return NULL;
+		}
+
+		log_debug(logger, "Handler assigned");
+	}
+
+	if (client_sock < 0) {
+		log_error(logger, "Accept failed");
+		return NULL;
+	}
+
+	return 0;
+}

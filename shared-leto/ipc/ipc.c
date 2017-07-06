@@ -171,13 +171,10 @@ void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
 
 	free(programFinish);
 	free(buffer);
-
-
-
 }
 
 void ipc_client_requestNewPage(int fd, uint32_t pid) {
-	ipc_struct_memory_new_page newPageRequest = { {PROGRAM_FINISH}, pid };
+	ipc_struct_memory_new_page newPageRequest = { {MEMORY_NEW_PAGE}, pid };
 
 	send(fd, &newPageRequest, sizeof(ipc_struct_memory_new_page), 0);
 }
@@ -244,4 +241,25 @@ int ipc_client_waitSetSharedVariableValueResponse(int fd) {
 	ipc_struct_set_shared_variable_response response;
 	recv(fd, &response, sizeof(ipc_struct_set_shared_variable_response), 0);
 	return response.value;
+}
+
+
+void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset, int size, void *buffer) {
+	ipc_header header;
+
+	header.operationIdentifier = MEMORY_WRITE;
+
+	int totalSize = sizeof(ipc_header) + sizeof(int) * 4 + size;
+	void *buf = malloc(totalSize);
+
+	memcpy(buf, &header, sizeof(ipc_header));
+	memcpy(buf + sizeof(ipc_header), &pid, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int), &pageNumber, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int), &offset, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int), &size, sizeof(int));
+	//pid pagenumber offset size
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(int), buffer, size);
+
+
+	send(fd, buf, totalSize, 0);
 }

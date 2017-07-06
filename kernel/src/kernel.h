@@ -48,5 +48,6 @@ void *dispatcher_mainFunction(void);
 void *configurationWatcherThread_mainFunction();
 
 void executeNewProgram(t_PCB *pcb);
+t_PCB *createPCBFromScript(char *script);
 
 #endif /* KERNEL_H_ */

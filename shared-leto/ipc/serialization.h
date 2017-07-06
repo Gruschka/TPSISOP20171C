@@ -26,7 +26,10 @@ typedef enum {
 	GET_SHARED_VARIABLE_RESPONSE,
 	SET_SHARED_VARIABLE,
 	SET_SHARED_VARIABLE_RESPONSE,
-	PRINT_CONSOLE_MESSAGE
+	PRINT_CONSOLE_MESSAGE,
+	MEMORY_INIT_PROGRAM,
+	MEMORY_INIT_PROGRAM_RESPONSE,
+	MEMORY_WRITE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -96,6 +99,27 @@ typedef struct set_shared_variable_response {
 	ipc_header header;
 	int value;
 } __attribute__((packed)) ipc_struct_set_shared_variable_response;
+
+typedef struct memory_init_program {
+	ipc_header header;
+	int pid;
+	int numberOfPages;
+} __attribute__((packed)) ipc_struct_memory_init_program;
+
+//FIXME cambiar esto para q me mande el pid y evitar que sea bloqueante la inicializacion
+typedef struct memory_init_program_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_init_program_response;
+
+typedef struct memory_write {
+	ipc_header header;
+	int pid;
+	int pageNumber;
+	int offset;
+	int size;
+	void *buffer;
+} __attribute__((packed)) ipc_struct_memory_write;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 
