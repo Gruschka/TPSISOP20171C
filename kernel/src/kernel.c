@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 
 	initSharedVariables();
 //	testMemory();
-	testSemaphores();
+//	testSemaphores();
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
