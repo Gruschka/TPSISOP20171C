@@ -23,6 +23,9 @@ typedef struct t_kernel_config {
 	t_scheduling_algorithm schedulingAlgorithm; // FIFO/RR
 	int multiprogrammingDegree;
 	int stackSize;
+	char **semaphoreIDs;
+	int *semaphoreValues;
+	char **sharedVariableNames;
 	//TODO: Agregar semaforos y variables compartidas
 } t_kernel_config;
 
@@ -47,8 +50,8 @@ void *scheduler_mainFunction(void);
 void *dispatcher_mainFunction(void);
 void *configurationWatcherThread_mainFunction();
 
-void semaphoreDidBlockProcess(t_PCB *pcb);
-void semaphoreDidWakeProcess(t_PCB *pcb);
+void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier);
+void semaphoreDidWakeProcess(t_PCB *pcb, char *identifier);
 
 void executeNewProgram(t_PCB *pcb);
 t_PCB *createPCBFromScript(char *script);
