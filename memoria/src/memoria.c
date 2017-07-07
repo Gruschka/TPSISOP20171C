@@ -25,7 +25,7 @@
 #include <pthread.h>
 #include <ipc/ipc.h>
 
-t_log *logger;
+t_log *consoleLog;
 
 pthread_rwlock_t physicalMemoryRwlock;
 pthread_rwlock_t cacheMemoryRwlock;
@@ -510,7 +510,7 @@ void size_logMemorySize() {
 void dump_cache() {
 	pthread_rwlock_rdlock(&cacheMemoryRwlock);
 	char *logPath = "./src/cache_dump.txt";
-	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
 
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
@@ -538,7 +538,7 @@ void dump_cache() {
 void dump_pageEntriesAndActiveProcesses() {
 	pthread_rwlock_rdlock(&physicalMemoryRwlock);
 	char *logPath = "./src/pages_table_dump.txt";
-	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
 
 	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
@@ -551,7 +551,7 @@ void dump_pageEntriesAndActiveProcesses() {
 	for (i = 0; *(processesIDs + i) != -1; i++) {
 		log_info(log, "%d", *(processesIDs + i));
 	}
-
+	free(processesIDs);
 	log_destroy(log);
 	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
@@ -559,7 +559,7 @@ void dump_pageEntriesAndActiveProcesses() {
 void dump_pagesContentForProcess(u_int32_t processID) {
 	pthread_rwlock_rdlock(&physicalMemoryRwlock);
 	char *logPath = "./src/process_memory_dump.txt";
-	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
+	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
 
 	log_info(log, "Contenido de las páginas asignadas para proceso (processID: %d)", processID);
 	int i;
@@ -594,6 +594,7 @@ void dump_assignedPagesContent() {
 	for (i = 0; *(processesIDs + i) != -1; i++) {
 		dump_pagesContentForProcess(*(processesIDs + i));
 	}
+	free(processesIDs);
 	pthread_rwlock_unlock(&physicalMemoryRwlock);
 }
 
@@ -677,8 +678,10 @@ int main(int argc, char **argv) {
 	pthread_rwlock_init(&physicalMemoryRwlock, NULL);
 	pthread_rwlock_init(&cacheMemoryRwlock, NULL);
 
-	char *logPath = "./src/debug.txt";
-	logger = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
+	{ // Log
+		char *logPath = "./src/debug.txt";
+		consoleLog = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
+	}
 
 	{ // Configuración
 		char *configPath = (argc > 1) ? argv[1] : "./src/config.txt";
@@ -691,10 +694,6 @@ int main(int argc, char **argv) {
 		k_maxPagesForEachProcessInCache = config_get_int_value(config, "CACHE_X_PROC");
 		k_physicalMemoryAccessDelay = config_get_int_value(config, "RETARDO_MEMORIA");
 		config_destroy(config);
-
-		// Server
-		pthread_t threadId;
-		pthread_create(&threadId, NULL, serverThread_main, NULL);
 	}
 
 	{ // Physical memory initialization
@@ -724,32 +723,9 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	{ // Tests
-//		int a = mem_initProcess(0, 10);
-//		int b = mem_initProcess(1, 10);
-//		int c = mem_initProcess(2, 10);
-//		int d = mem_initProcess(0, 1);
-//
-//		char *texto = "esto es una prueba capo";
-//		int a1 = mem_write(0, 0, 0, 24, texto);
-//		int a2 = mem_write(0, 9, 0, 24, texto);
-//		int a3 = mem_write(1, 2, 0, 24, texto);
-//		int a4 = mem_write(0, 10, 0, 24, texto);
-//
-//		char *meTraje1 = mem_read(0, 0, 0, 24);
-//		char *meTraje2 = mem_read(0, 9, 0, 24);
-//		char *meTraje3 = mem_read(1, 2, 0, 24);
-//		char *meTraje4 = mem_read(0, 10, 0, 24);
-//
-//		int b1 = mem_addPagesToProcess(0, 1);
-//		int b2 = mem_write(0, 10, 0, 24, texto);
-//		char *b3 = mem_read(0, 10, 0, 24);
-//		char *b4 = mem_read(0, 11, 0, 24);
-//
-//		mem_deinitProcess(0);
-//
-//		char *c1 = mem_read(0, 0, 0, 24);
-//		char *c2 = mem_read(1, 2, 0, 24);
+	{	// Server
+		pthread_t threadID;
+		pthread_create(&threadID, NULL, serverThread_main, NULL);
 	}
 
 	printf("Todo configurado y funcionando.\n\n");
@@ -772,6 +748,9 @@ int main(int argc, char **argv) {
 
 	pthread_rwlock_destroy(&physicalMemoryRwlock);
 	pthread_rwlock_destroy(&cacheMemoryRwlock);
+	free(physicalMemory);
+	free(cache);
+	log_destroy(consoleLog);
 
 	return EXIT_SUCCESS;
 }
@@ -783,23 +762,38 @@ void *connection_handler(void *shit) {
 	while (1) {
 		recv(sockfd, &header, sizeof(ipc_header), MSG_PEEK);
 
-		log_debug(logger, "Operation identifier: %d",
-				header.operationIdentifier);
+		log_debug(consoleLog, "Operation identifier: %d", header.operationIdentifier);
 
 		switch (header.operationIdentifier) {
 		case MEMORY_INIT_PROGRAM: {
 			ipc_struct_memory_init_program request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_init_program), 0);
-			log_debug(logger, "Init program. pid: %d. numberOfPages: %d",
-					request.pid, request.numberOfPages);
+			log_debug(consoleLog, "Init program. pid: %d. numberOfPages: %d", request.pid, request.numberOfPages);
 			int result = mem_initProcess(request.pid, request.numberOfPages);
 
 			ipc_struct_memory_init_program_response response;
 			response.header.operationIdentifier = MEMORY_INIT_PROGRAM_RESPONSE;
 			response.success = result > 0 ? 1 : 0;
 
-			send(sockfd, &response,
-					sizeof(ipc_struct_memory_init_program_response), 0);
+			send(sockfd, &response, sizeof(ipc_struct_memory_init_program_response), 0);
+			break;
+		}
+		case MEMORY_READ: {
+			ipc_struct_memory_read request;
+			recv(sockfd, &request, sizeof(ipc_struct_memory_read), 0);
+			log_debug(consoleLog, "Read page; pid: %d; pageNumber: %d; offset: %d; size: %d", request.pid, request.pageNumber, request.offset, request.size);
+			void *buffer = mem_read(request.pid, request.pageNumber, request.offset, request.size);
+
+			int success = buffer != NULL;
+
+			ipc_struct_memory_read_response response;
+			response.header.operationIdentifier = MEMORY_READ_RESPONSE;
+			response.success = success;
+			response.size = request.size;
+			response.buffer = buffer;
+
+			send(sockfd, &response, sizeof(ipc_struct_memory_read_response) - sizeof(void *) + request.size, 0);
+
 			break;
 		}
 		case MEMORY_WRITE: {
@@ -815,13 +809,14 @@ void *connection_handler(void *shit) {
 			recv(sockfd, buffer, request.size, 0);
 			request.buffer = buffer;
 
-			log_debug(logger,
-					"Write. pid: %d. pageNumber: %d. offset: %d. size: %d. buffer: %s",
-					request.pid, request.pageNumber, request.offset,
-					request.size, request.buffer);
-			int result = mem_write(request.pid, request.pageNumber, request.offset,
-					request.size, request.buffer);
-			log_debug(logger, "mem_write result: %d", result);
+			log_debug(consoleLog, "Write. pid: %d. pageNumber: %d. offset: %d. size: %d. buffer: %s", request.pid, request.pageNumber, request.offset, request.size, request.buffer);
+			int result = mem_write(request.pid, request.pageNumber, request.offset, request.size, request.buffer);
+
+			ipc_struct_memory_write_response response;
+			response.header.operationIdentifier = MEMORY_WRITE_RESPONSE;
+			response.success = result > 0 ? 1 : 0;
+
+			send(sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
 			break;
 		}
 		default:
@@ -839,9 +834,9 @@ void *serverThread_main(void *mierda) {
 	//Create socket
 	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
 	if (socket_desc == -1) {
-		log_error(logger, "No se pudo crear el socket");
+		log_error(consoleLog, "No se pudo crear el socket");
 	}
-	log_debug(logger, "Se creo el socket");
+	log_debug(consoleLog, "Se creo el socket");
 
 	//Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
@@ -851,7 +846,7 @@ void *serverThread_main(void *mierda) {
 	//Bind
 	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
 		//print the error message
-		log_error(logger, "Falló el bind");
+		log_error(consoleLog, "Falló el bind");
 		return NULL;
 	}
 
@@ -859,26 +854,26 @@ void *serverThread_main(void *mierda) {
 	listen(socket_desc, 3);
 
 	//Accept and incoming connection
-	log_debug(logger, "Waiting for incoming connections...");
+	log_debug(consoleLog, "Waiting for incoming connections...");
 	c = sizeof(struct sockaddr_in);
 
 	pthread_t thread_id;
 
 	while ((client_sock = accept(socket_desc, (struct sockaddr *) &client,
 			(socklen_t*) &c))) {
-		log_debug(logger, "Connection accepted");
+		log_debug(consoleLog, "Connection accepted");
 
 		if (pthread_create(&thread_id, NULL, connection_handler,
 				(void*) &client_sock) < 0) {
-			log_error(logger, "Could not create thread");
+			log_error(consoleLog, "Could not create thread");
 			return NULL;
 		}
 
-		log_debug(logger, "Handler assigned");
+		log_debug(consoleLog, "Handler assigned");
 	}
 
 	if (client_sock < 0) {
-		log_error(logger, "Accept failed");
+		log_error(consoleLog, "Accept failed");
 		return NULL;
 	}
 

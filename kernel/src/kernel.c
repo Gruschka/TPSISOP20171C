@@ -53,14 +53,21 @@ uint32_t pageSize = 256;
 
 int memory_sockfd;
 
-//TODO: implement semaphore block process callback
 void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier) {
 	log_debug(logger, "[semaphore: %s] Process<PID:%d> did block", identifier, pcb->pid);
+	pthread_mutex_lock(&blockQueue_mutex);
+	blockQueue_addProcess(pcb);
+	pthread_mutex_unlock(&blockQueue_mutex);
 }
 
-//TODO: implement semaphore wake process callback
 void semaphoreDidWakeProcess(t_PCB *pcb, char *identifier) {
+	pthread_mutex_lock(&blockQueue_mutex);
+	pthread_mutex_lock(&readyQueue_mutex);
+	t_PCB *awakenPCB = blockQueue_popProcess(pcb->pid);
+	readyQueue_addProcess(awakenPCB);
 	log_debug(logger, "[semaphores: %s] Process<PID:%d> did wake up", identifier, pcb->pid);
+	pthread_mutex_unlock(&readyQueue_mutex);
+	pthread_mutex_unlock(&blockQueue_mutex);
 }
 
 void initSharedVariables() {
@@ -118,6 +125,39 @@ void testMemory() {
 //	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
 //			getSharedVariableValue("A"), getSharedVariableValue("B"),
 //			getSharedVariableValue("C"), getSharedVariableValue("D"));
+}
+
+void testSemaphores() {
+	// KERNEL SEMAPHORE TEST START
+	// TODO: remove semaphore test
+	// function pointer initialization
+
+	// semaphores init
+	kernel_semaphores_init(semaphoreDidBlockProcess,semaphoreDidWakeProcess);
+
+	// generate test semaphore & pcb
+	t_PCB * dummyPCB1 = malloc(sizeof(t_PCB));
+	dummyPCB1->pid = 1;
+	t_PCB * dummyPCB2 = malloc(sizeof(t_PCB));
+	dummyPCB2->pid = 2;
+	t_PCB * dummyPCB3 = malloc(sizeof(t_PCB));
+	dummyPCB3->pid = 3;
+
+	char *semaphoreId = malloc(sizeof(char)*2);
+	sprintf(semaphoreId,"a\0");
+	kernel_semaphore *testSemaphore = kernel_semaphore_make(semaphoreId, 1); // 1 instance
+
+	kernel_semaphore_wait(testSemaphore, dummyPCB1);
+	kernel_semaphore_wait(testSemaphore, dummyPCB3);
+	kernel_semaphore_wait(testSemaphore, dummyPCB2);
+
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
+
+	//destroy semaphore
+	kernel_semaphore_destroy(testSemaphore);
+	// KERNEL SEMAPHORE TEST END
 }
 
 int connectToMemory() {
@@ -192,46 +232,17 @@ int main(int argc, char **argv) {
 
 	fetchConfiguration();
 
-	// KERNEL SEMAPHORE TEST START
-	// TODO: remove semaphore test
-	// function pointer initialization
-
-	// semaphores init
-	kernel_semaphores_init(semaphoreDidBlockProcess,semaphoreDidWakeProcess);
-
-	// generate test semaphore & pcb
-	t_PCB * dummyPCB1 = malloc(sizeof(t_PCB));
-	dummyPCB1->pid = 1;
-	t_PCB * dummyPCB2 = malloc(sizeof(t_PCB));
-	dummyPCB2->pid = 2;
-	t_PCB * dummyPCB3 = malloc(sizeof(t_PCB));
-	dummyPCB3->pid = 3;
-
-	char *semaphoreId = malloc(sizeof(char)*2);
-	sprintf(semaphoreId,"a\0");
-	kernel_semaphore *testSemaphore = kernel_semaphore_make(semaphoreId, 1); // 1 instance
-
-	kernel_semaphore_wait(testSemaphore, dummyPCB1);
-	kernel_semaphore_wait(testSemaphore, dummyPCB3);
-	kernel_semaphore_wait(testSemaphore, dummyPCB2);
-
-	kernel_semaphore_signal(testSemaphore, dummyPCB1);
-	kernel_semaphore_signal(testSemaphore, dummyPCB1);
-	kernel_semaphore_signal(testSemaphore, dummyPCB1);
-
-	//destroy semaphore
-	kernel_semaphore_destroy(testSemaphore);
-	// KERNEL SEMAPHORE TEST END
-
 	newQueue = newQueue_create();
 	readyQueue = readyQueue_create();
 	execList = execList_create();
+	blockQueue = blockQueue_create();
 	sharedVariables = list_create();
 	cpusList = list_create();
 	semaphores = list_create();
 
 	initSharedVariables();
 //	testMemory();
+//	testSemaphores();
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -310,19 +321,37 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 				sizeof(char) * (programStart->codeLength + 1));
 		memcpy(codeString, programStart->code, programStart->codeLength);
 		codeString[programStart->codeLength] = '\0';
-		log_info(logger, "Program received. Code length: %d. Code: %s",
+		log_info(logger, "[consoles-server] Program received. Code length: %d. Code: %s",
 				programStart->codeLength, codeString);
 		t_PCB *newProgram = createPCBFromScript(codeString);
 		newProgram->pid = ++lastPID;
-		if (memory_sendInitProgram(newProgram->pid, newProgram->codePages) != -1) {
-			//FIXME separar y mandar en cachos el codigo, ahora esta hardcodeado 180 de largo
-			ipc_client_sendMemoryWrite(memory_sockfd, newProgram->pid, 0, 0, 180, codeString);
-			ipc_sendStartProgramResponse(fd, newProgram->pid);
-			executeNewProgram(newProgram);
-		} else {
-			//fixme manejar error
-			log_error(logger, "Fallo el init program");
+
+		int numberOfPages = newProgram->codePages;
+		int pid = newProgram->pid;
+		int total = programStart->codeLength;
+
+		if (memory_sendInitProgram(pid, numberOfPages) == -1) {
+			//FIXME: MANEJAR ERROR
+			log_error(logger, "fallo el init program");
+			break;
 		}
+
+		int currentPage;
+		for (currentPage = 0; currentPage < numberOfPages; currentPage++) {
+			int size;
+
+			if (currentPage == numberOfPages - 1) { // la ultima pagina
+				size = total - (currentPage * pageSize);
+			} else {
+				size = pageSize;
+			}
+
+			ipc_client_sendMemoryWrite(memory_sockfd, pid, currentPage, 0, size, codeString + currentPage * pageSize);
+		}
+
+
+		ipc_sendStartProgramResponse(fd, newProgram->pid);
+		executeNewProgram(newProgram);
 
 		break;
 	}

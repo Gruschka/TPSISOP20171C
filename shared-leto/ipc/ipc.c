@@ -263,3 +263,34 @@ void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset, int
 
 	send(fd, buf, totalSize, 0);
 }
+
+void ipc_client_sendMemoryRead(int fd, int pid, int pageNumber, int offset, int size) {
+	ipc_struct_memory_read memoryRead;
+
+	memoryRead.pid = pid;
+	memoryRead.pageNumber = pageNumber;
+	memoryRead.offset = offset;
+	memoryRead.size = size;
+
+	send(fd, &memoryRead, sizeof(ipc_struct_memory_read), 0);
+}
+
+ipc_struct_memory_read_response *ipc_client_waitMemoryReadResponse(int fd) {
+	ipc_struct_memory_read_response *response = malloc(sizeof(ipc_struct_memory_read_response));
+	ipc_header header;
+
+	recv(fd, &header, sizeof(ipc_header), MSG_PEEK);
+	if (header.operationIdentifier != MEMORY_READ_RESPONSE) {
+		return NULL;
+	}
+
+	recv(fd, &header, sizeof(ipc_header), 0);
+
+	recv(fd, &(response->success), sizeof(char), 0);
+	recv(fd, &(response->size), sizeof(int), 0);
+
+	response->buffer = malloc(response->size);
+	recv(fd, response->buffer, response->size, 0);
+
+	return response;
+}

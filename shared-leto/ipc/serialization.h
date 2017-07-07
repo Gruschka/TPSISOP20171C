@@ -29,7 +29,10 @@ typedef enum {
 	PRINT_CONSOLE_MESSAGE,
 	MEMORY_INIT_PROGRAM,
 	MEMORY_INIT_PROGRAM_RESPONSE,
-	MEMORY_WRITE
+	MEMORY_READ,
+	MEMORY_READ_RESPONSE,
+	MEMORY_WRITE,
+	MEMORY_WRITE_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -112,6 +115,21 @@ typedef struct memory_init_program_response {
 	char success;
 } __attribute__((packed)) ipc_struct_memory_init_program_response;
 
+typedef struct memory_read {
+	ipc_header header;
+	int pid;
+	int pageNumber;
+	int offset;
+	int size;
+} __attribute__((packed)) ipc_struct_memory_read;
+
+typedef struct memory_read_program_response {
+	ipc_header header;
+	char success;
+	int size;
+	void *buffer;
+} __attribute__((packed)) ipc_struct_memory_read_response;
+
 typedef struct memory_write {
 	ipc_header header;
 	int pid;
@@ -120,6 +138,11 @@ typedef struct memory_write {
 	int size;
 	void *buffer;
 } __attribute__((packed)) ipc_struct_memory_write;
+
+typedef struct memory_write_program_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_write_response;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 

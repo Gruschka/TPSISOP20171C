@@ -97,9 +97,25 @@ void exitQueue_addProcess(t_PCB *process)
 	queue_push(exitQueue, process);
 }
 
-t_queue *blockQueue_create()
+t_list *blockQueue_create()
 {
 	pthread_mutex_init(&blockQueue_mutex,NULL);
-	blockQueue = queue_create();
+	blockQueue = list_create();
 	return blockQueue;
+}
+
+void blockQueue_addProcess(t_PCB *pcb) {
+	list_add(blockQueue, pcb);
+}
+
+t_PCB *blockQueue_popProcess(int pid) {
+	int i;
+
+	for (i = 0; i < list_size(blockQueue); i++) {
+		if (((t_PCB *)list_get(blockQueue, i))->pid == pid) {
+			return list_remove(blockQueue, i);
+		}
+	}
+
+	return NULL;
 }
