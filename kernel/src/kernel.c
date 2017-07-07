@@ -40,6 +40,7 @@ t_kernel_config *configuration;
 t_log *logger;
 t_list *sharedVariables;
 t_list *cpusList; //TODO: Sincronizar acceso a esta lista
+t_list *semaphores; //TODO: Sincronizar acceso a esta lista
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -52,22 +53,38 @@ uint32_t pageSize = 256;
 
 int memory_sockfd;
 
-// function pointers for kernel semaphore implementation
-SemaphoreDidBlockProcessFunction semaphoreDidBlockProcessFunction;
-SemaphoreDidWakeupProcessFunction semaphoreDidWakeupProcessFunction;
-
 //TODO: implement semaphore block process callback
-void semaphoreDidBlockProcess(t_PCB *pcb){
-	printf("semaphoreDidBlockProcess %d\n",pcb->pid);
-	fflush(stdout);
+void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier) {
+	log_debug(logger, "[semaphore: %s] Process<PID:%d> did block", identifier, pcb->pid);
 }
 
 //TODO: implement semaphore wake process callback
-void semaphoreDidWakeProcess(t_PCB *pcb){
-	printf("semaphoreDidBlockProcess %d\n",pcb->pid);
-	fflush(stdout);
+void semaphoreDidWakeProcess(t_PCB *pcb, char *identifier) {
+	log_debug(logger, "[semaphores: %s] Process<PID:%d> did wake up", identifier, pcb->pid);
 }
 
+void initSharedVariables() {
+	int i;
+
+	for (i = 0; configuration->sharedVariableNames[i] != NULL; i++) {
+		shared_variable *var = createSharedVariable(configuration->sharedVariableNames[i]);
+		list_add(sharedVariables, var);
+		log_debug(logger, "created shared variable: %s (value: %d)", var->identifier, var->value);
+	}
+}
+
+void initSemaphores() {
+	int i;
+
+	for (i = 0; configuration->semaphoreIDs[i] != NULL; i++) {
+		char *identifier = configuration->semaphoreIDs[i];
+		int value = configuration->semaphoreValues[i];
+
+		kernel_semaphore *sem = kernel_semaphore_make(identifier, value);
+		list_add(semaphores, sem);
+		log_debug(logger, "created semaphore: %s (value: %d)", sem->identifier, sem->count);
+	}
+}
 
 void testMemory() {
 	void *page = memory_createPage(pageSize);
@@ -80,27 +97,27 @@ void testMemory() {
 	log_debug(logger, "fourthBlock: %p", fourthBlock);
 	memory_dumpPage(page);
 
-	shared_variable *a = createSharedVariable("A");
-	shared_variable *b = createSharedVariable("B");
-	shared_variable *c = createSharedVariable("C");
-	shared_variable *global = createSharedVariable("Global");
-	list_add(sharedVariables, a);
-	list_add(sharedVariables, b);
-	list_add(sharedVariables, c);
-	list_add(sharedVariables, global);
-
-	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-			getSharedVariableValue("A"), getSharedVariableValue("B"),
-			getSharedVariableValue("C"), getSharedVariableValue("D"));
-
-	setSharedVariableValue("A", 1);
-	setSharedVariableValue("B", 2);
-	setSharedVariableValue("C", 3);
-	setSharedVariableValue("Global", 112);
-
-	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-			getSharedVariableValue("A"), getSharedVariableValue("B"),
-			getSharedVariableValue("C"), getSharedVariableValue("D"));
+//	shared_variable *a = createSharedVariable("A");
+//	shared_variable *b = createSharedVariable("B");
+//	shared_variable *c = createSharedVariable("C");
+//	shared_variable *global = createSharedVariable("Global");
+//	list_add(sharedVariables, a);
+//	list_add(sharedVariables, b);
+//	list_add(sharedVariables, c);
+//	list_add(sharedVariables, global);
+//
+//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
+//			getSharedVariableValue("A"), getSharedVariableValue("B"),
+//			getSharedVariableValue("C"), getSharedVariableValue("D"));
+//
+//	setSharedVariableValue("A", 1);
+//	setSharedVariableValue("B", 2);
+//	setSharedVariableValue("C", 3);
+//	setSharedVariableValue("Global", 112);
+//
+//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
+//			getSharedVariableValue("A"), getSharedVariableValue("B"),
+//			getSharedVariableValue("C"), getSharedVariableValue("D"));
 }
 
 int connectToMemory() {
@@ -178,25 +195,29 @@ int main(int argc, char **argv) {
 	// KERNEL SEMAPHORE TEST START
 	// TODO: remove semaphore test
 	// function pointer initialization
-	semaphoreDidBlockProcessFunction = &semaphoreDidBlockProcess;
-	semaphoreDidWakeupProcessFunction = &semaphoreDidWakeProcess;
 
 	// semaphores init
-	kernel_semaphores_init(semaphoreDidBlockProcessFunction,semaphoreDidWakeupProcessFunction);
+	kernel_semaphores_init(semaphoreDidBlockProcess,semaphoreDidWakeProcess);
 
 	// generate test semaphore & pcb
-	t_PCB * dummyPCB = malloc(sizeof(t_PCB));
-	dummyPCB->pid =1;
+	t_PCB * dummyPCB1 = malloc(sizeof(t_PCB));
+	dummyPCB1->pid = 1;
+	t_PCB * dummyPCB2 = malloc(sizeof(t_PCB));
+	dummyPCB2->pid = 2;
+	t_PCB * dummyPCB3 = malloc(sizeof(t_PCB));
+	dummyPCB3->pid = 3;
+
 	char *semaphoreId = malloc(sizeof(char)*2);
 	sprintf(semaphoreId,"a\0");
-	kernel_semaphore *testSemaphore = kernel_semaphore_make(semaphoreId,1); // 1 instance
+	kernel_semaphore *testSemaphore = kernel_semaphore_make(semaphoreId, 1); // 1 instance
 
-	// 2 consumptions -> block
-	kernel_semaphore_wait(testSemaphore,dummyPCB);
-	kernel_semaphore_wait(testSemaphore,dummyPCB);
+	kernel_semaphore_wait(testSemaphore, dummyPCB1);
+	kernel_semaphore_wait(testSemaphore, dummyPCB3);
+	kernel_semaphore_wait(testSemaphore, dummyPCB2);
 
-	// 1 release -> wake
-	kernel_semaphore_signal(testSemaphore,dummyPCB);
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
+	kernel_semaphore_signal(testSemaphore, dummyPCB1);
 
 	//destroy semaphore
 	kernel_semaphore_destroy(testSemaphore);
@@ -207,21 +228,20 @@ int main(int argc, char **argv) {
 	execList = execList_create();
 	sharedVariables = list_create();
 	cpusList = list_create();
+	semaphores = list_create();
 
-	testMemory();
+	initSharedVariables();
+//	testMemory();
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
 		return EXIT_FAILURE;
-	} else {
-		log_debug(logger, "sigo todo bien");
 	}
 
 	int i;
 	for (i = 0; i < configuration->multiprogrammingDegree; i++) {
 		sem_post(&readyQueue_availableSpaces);
 	}
-
 
 	pthread_create(&consolesServerThread, NULL, consolesServer_main, NULL );
 	pthread_create(&cpusServerThread, NULL, cpusServer_main, NULL );
@@ -270,6 +290,7 @@ void fetchConfiguration() {
 	configuration->multiprogrammingDegree = config_get_int_value(__config,
 			"GRADO_MULTIPROG");
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
+	configuration->sharedVariableNames = config_get_array_value(__config, "SHARED_VARS");
 }
 
 ///////////////////////////// Consoles server /////////////////////////////////

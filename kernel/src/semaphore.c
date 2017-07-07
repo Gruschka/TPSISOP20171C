@@ -8,6 +8,9 @@
 #include "semaphore.h"
 
 #include <stdlib.h>
+#include <commons/log.h>
+
+extern t_log *logger;
 
 SemaphoreDidBlockProcessFunction _semaphoreDidBlockProcessFunction;
 SemaphoreDidWakeupProcessFunction _semaphoreDidWakeupProcessFunction;
@@ -23,17 +26,20 @@ int kernel_semaphore_wait(kernel_semaphore *semaphore, t_PCB *pcb) {
 	if (semaphore->count > 0) return semaphore->count--;
 
 	queue_push(semaphore->__waitList, pcb);
-	_semaphoreDidBlockProcessFunction(pcb);
+	_semaphoreDidBlockProcessFunction(pcb, semaphore->identifier);
 
-	return semaphore->count--;
+	return semaphore->count;
 }
 
 int kernel_semaphore_signal(kernel_semaphore *semaphore, t_PCB *pcb) {
 	if (semaphore->count == 0) {
-		// aca tengo que desbloquear 1 proceso de la cola
-		t_PCB *pcb = queue_pop(semaphore->__waitList);
+		t_PCB *unblockedPCB = queue_pop(semaphore->__waitList);
 
-		_semaphoreDidWakeupProcessFunction(pcb);
+		if (unblockedPCB != NULL) {
+			_semaphoreDidWakeupProcessFunction(unblockedPCB, semaphore->identifier);
+			return semaphore->count;
+		}
+
 		return semaphore->count++;
 	}
 
@@ -62,4 +68,8 @@ int kernel_semaphore_destroy(kernel_semaphore *semaphore){
 		queueIterator++;
 	}
 	return EXIT_SUCCESS;
+}
+
+void dump_semaphore(kernel_semaphore *sem) {
+	log_debug(logger, "[semaphore-dump] identifier: %s. count: %d. waiting q count: %d", sem->identifier, sem->count, queue_size(sem->__waitList));
 }

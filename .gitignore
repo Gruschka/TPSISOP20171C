@@ -62,3 +62,9 @@ local.properties
 
 # TeXlipse plugin
 .texlipse
+
+#memoria
+debug.txt
+cache_dump.txt
+pages_table_dump.txt
+process_memory_dump.txt
