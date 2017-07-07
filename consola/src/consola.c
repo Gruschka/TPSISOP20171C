@@ -315,26 +315,51 @@ void connectToKernel(char * program) {
 	ipc_client_sendHandshake(CONSOLE, sockfd);
 	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(
 			sockfd);
-	log_debug(logger, "Se recibió respuesta de handshake. Success: %d",
+	log_debug(logger, "Handshake response received: Success: %d",
 			response->success);
 
 	free(response);
 	void *buffer = 0;
+
 	//Guarda el largo del programa y lo mete en buffer
 	programLength = parser_getAnSISOPFromFile(program, &buffer);
 
 	log_debug(logger, "Read file. %s. Size: %d", program, programLength);
 	dump_buffer(buffer, programLength);
+
 	//Envia el codigo del programa al Kernel
 	ipc_client_sendStartProgram(sockfd, programLength, buffer);
+
+
 	//Se le asigna pid
 	ipc_struct_program_start_response *startResponse =
 			ipc_client_receiveStartProgramResponse(sockfd);
+
+	//If no PID can be assigned
+	if(startResponse == NULL){
+
+		log_error(logger, "Start response failed - Can not assign PID. Program %s can not execute",program);
+
+		close(sockfd);
+
+		free(startResponse);
+		free(buffer);
+		free(aux);
+
+		pthread_exit(0);
+
+
+	}
+
 	aux->kernelSocket = sockfd;
 	aux->processId = startResponse->pid;
+	aux->consoleImpressions = 0;
+
 	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
 
 	free(startResponse);
+
+	free(buffer);
 
 	list_add(processList, aux);
 	int iterations = 0;
@@ -391,11 +416,15 @@ void connectToKernel(char * program) {
 	//Saves process end time in case it finishes it execution normally
 	aux->endTime = time(NULL);
 
+	//Closes connection to kernel
+	close(aux->kernelSocket);
+
 	//Shows time info
 	showFinishedThreadInfo(aux);
 
 	//Frees reserved memory
 	free(aux);
+
 	return;
 }
 
@@ -476,6 +505,7 @@ int noThreadsInExecution() {
 
 void showFinishedThreadInfo(t_process * aProcess){
 
+	/*
 	printf("\n\n***************************************************************************************\n");
 	printf("Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
 	printf("Program started execution at: %s",ctime(&aProcess->startTime));
@@ -483,6 +513,12 @@ void showFinishedThreadInfo(t_process * aProcess){
 	printf("The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
 	printf("This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 	printf("***************************************************************************************\n");
+	 */
+	log_info(logger, "Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
+	log_info(logger, "Program started execution at: %s",ctime(&aProcess->startTime));
+	log_info(logger, "Program finished execution at: %s",ctime(&aProcess->endTime));
+	log_info(logger, "The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
+	log_info(logger, "This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 
 	return;
 
