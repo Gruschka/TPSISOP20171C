@@ -55,10 +55,15 @@ Ante un pedido de escritura el File System almacenará en el path enviado por p
 */
 
 int fs_loadConfig(t_FS *FS);
-int fs_mount(t_FS *FS, char *path);
-int fs_openOrCreateMetadata();
-int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumber);
+int fs_mount(t_FS *FS);
+int fs_openOrCreateMetadata(t_FS *FS);
+int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char *magicNumber);
 t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor);
+int fs_validateFile(char *path);
+int fs_createFile(char *path);
+int fs_createBlockFile(int blockNumber);
+int fs_getFirstFreeBlock(t_FS *FS);
+int fs_getNumberOfDigits(int number);
 
 
 extern t_FS myFS;

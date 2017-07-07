@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <math.h>
 #include "filesystem.h"
+#include <sys/mman.h>
 
 t_config *config;
 t_log *logger;
@@ -33,6 +34,8 @@ int fs_loadConfig(t_FS *FS){
 
 	FS->mountDirectoryPath[0] = '\0';
 	strcat(FS->mountDirectoryPath,mount);
+
+	free(mount);
 
 	FS->MetadataDirectoryPath = "/Metadata/";
 
@@ -81,22 +84,23 @@ int fs_loadConfig(t_FS *FS){
 	FS->metadata.magicNumber = "SADICA";
 	return 0;
 }
-int fs_mount(t_FS *FS, char *path){
+int fs_mount(t_FS *FS){
+	myFS.mountDirectory = opendir(myFS.mountDirectoryPath);
+
 	//check if mount path exists then open
-	FS->mountDirectory = opendir(path);
 	if(myFS.mountDirectory == NULL){
 		// doesnt exist then create
-		int error = mkdir(path,0777);
+		int error = mkdir(myFS.mountDirectoryPath,0777);
 		if(!error){
-			log_debug(logger,"FS Mount path created on directory %s", path);
+			log_debug(logger,"FS Mount path created on directory %s", myFS.mountDirectoryPath);
 		}else{
-			log_error(logger,"Error creating mount directory: %s",strerror(errno));
+			log_error(logger,"error creating mount path %s",strerror(errno));
 			return EXIT_FAILURE;
 		}
 	}
 	log_debug(logger,"found FS mount path");
 
-	fs_openOrCreateMetadata();
+	fs_openOrCreateMetadata(&myFS);
 
 	log_debug(logger,"looking for file directory %s", FS->filesDirectoryPath);
 	FS->filesDirectory = opendir(FS->filesDirectoryPath);
@@ -130,26 +134,26 @@ int fs_mount(t_FS *FS, char *path){
 	return EXIT_SUCCESS;
 
 }
-int fs_openOrCreateMetadata(){
+int fs_openOrCreateMetadata(t_FS *FS){
 	// open/create metadata dir
 
-	myFS.metadataDirectory = opendir(myFS.MetadataDirectoryPath);
-	if(myFS.metadataDirectory == NULL){
+	FS->metadataDirectory = opendir(FS->MetadataDirectoryPath);
+	if(FS->metadataDirectory == NULL){
 		// doesnt exist then create
-		int error = mkdir(myFS.MetadataDirectoryPath,0777);
+		int error = mkdir(FS->MetadataDirectoryPath,0777);
 		if(!error){
-			log_debug(logger,"Metadata directory created on directory %s", myFS.MetadataDirectoryPath);
+			log_debug(logger,"Metadata directory created on directory %s", FS->MetadataDirectoryPath);
 		}else{
 			log_error(logger,"Error creating metadata directory: %s",strerror(errno));
 			return EXIT_FAILURE;
 		}
 	}
 	//created or found
-	log_debug(logger,"Found and opened Metadata directory %s", myFS.MetadataDirectoryPath);
-	fs_openOrCreateMetadataFiles(myFS.metadata.blockSize,myFS.metadata.blockAmount,myFS.metadata.magicNumber);
+	log_debug(logger,"Found and opened Metadata directory %s", FS->MetadataDirectoryPath);
+	fs_openOrCreateMetadataFiles(FS,FS->metadata.blockSize,FS->metadata.blockAmount,FS->metadata.magicNumber);
 	return EXIT_SUCCESS;
 }
-int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumber){
+int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char *magicNumber){
 	FILE *metadataFileDescriptor;
 	FILE *bitmapFileDescriptor;
 	char buffer[50];
@@ -158,7 +162,7 @@ int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumb
 	t_FSMetadata checkMetadata;
 
 	log_debug(logger,"Looking for metadata file");
-	if(metadataFileDescriptor = fopen(myFS.FSMetadataFileName,"r+")){
+	if(metadataFileDescriptor = fopen(FS->FSMetadataFileName,"r+")){
 		log_debug(logger,"found metadata file, checking FS parameters");
 		checkMetadata = fs_getMetadataFromFile(metadataFileDescriptor);
 		if(checkMetadata.blockAmount == blockAmount && checkMetadata.blockSize == blockSize){
@@ -172,7 +176,7 @@ int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumb
 
 	}else{
 		log_debug(logger,"metadata file not found creating with parameters");
-		metadataFileDescriptor = fopen(myFS.FSMetadataFileName,"w+");
+		metadataFileDescriptor = fopen(FS->FSMetadataFileName,"w+");
 		memset(buffer,0,50);
 		sprintf(buffer,"TAMANIO_BLOQUES=%d\n",blockSize);
 		fputs(buffer,metadataFileDescriptor);
@@ -188,16 +192,32 @@ int fs_openOrCreateMetadataFiles(int blockSize, int blockAmount, char *magicNumb
 		fclose(metadataFileDescriptor);
 	}
 	log_debug(logger,"looking for bitmap file");
-	if(bitmapFileDescriptor = fopen(myFS.bitmapFileName,"rb+")){
+	if(bitmapFileDescriptor = fopen(FS->bitmapFileName,"rb+")){
 		log_debug(logger,"found bitmap file");
+		struct stat st;
+		fstat(bitmapFileDescriptor,&st);
+		int size = st.st_size;
+
+		char *bitarray = malloc(FS->metadata.blockAmount);
+		FS->bitmap->bitarray = mmap(0,FS->metadata.blockAmount,PROT_WRITE,MAP_PRIVATE,bitmapFileDescriptor,0);
+
+		FS->bitmap = bitarray_create(bitarray,FS->metadata.blockAmount);
+
 	}else{
 		log_debug(logger,"bitmap file not found creating with parameters");
-		bitmapFileDescriptor = fopen(myFS.bitmapFileName,"wb+");
-		char *bitarray = malloc(myFS.metadata.blockAmount);
-		memset(bitarray,0,myFS.metadata.blockAmount);
-		myFS.bitmap = bitarray_create_with_mode(bitarray,myFS.metadata.blockAmount,LSB_FIRST);
+		bitmapFileDescriptor = fopen(FS->bitmapFileName,"wb+");
+	    int error = lseek(bitmapFileDescriptor, FS->metadata.blockAmount-1, SEEK_SET);
+	    if (error == -1) {
+		close(bitmapFileDescriptor);
+		log_error(logger,"Error calling lseek() to 'stretch' the file: %s",strerror(errno));
+	        return EXIT_FAILURE;
+	    }
 
-		fwrite(myFS.bitmap->bitarray,myFS.metadata.blockAmount,1,bitmapFileDescriptor);
+		char *bitarray;
+
+		FS->bitmap = bitarray_create_with_mode(bitarray,FS->metadata.blockAmount,LSB_FIRST);
+		FS->bitmap->bitarray = mmap(0,FS->metadata.blockAmount,PROT_WRITE,MAP_PRIVATE,bitmapFileDescriptor,0);
+
 
 		fclose(bitmapFileDescriptor);
 		log_debug(logger,"bitmap created with parameters");
@@ -230,6 +250,71 @@ t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){
 	return output;
 
 }
+int fs_validateFile(char *path){
+	FILE *fileDescriptor;
+	if(fileDescriptor = fopen(path,"r+")){
+		close(fileDescriptor);
+		return EXIT_SUCCESS;
+	}else{
+		close(fileDescriptor);
+		return EXIT_FAILURE;
+	}
+}
+int fs_createFile(char *path){
+	FILE *newFileDescriptor;
+	size_t firstFreeBlock;
+	char bloques[50];
+	memset(bloques,0,50);
+
+	if(fs_validateFile(path)){
+		newFileDescriptor = fopen(path,"w+");
+		firstFreeBlock = fs_getFirstFreeBlock(&myFS);
+		fputs("TAMANIO=0\n",newFileDescriptor);
+		sprintf(bloques,"BLOQUES=[%d]\n",firstFreeBlock);
+		fputs(bloques,newFileDescriptor);
+		fs_createBlockFile(firstFreeBlock);
+		bitarray_set_bit(myFS.bitmap,firstFreeBlock);
+		return EXIT_SUCCESS;
+	}
+}
+int fs_createBlockFile(int blockNumber){
+	char *fileName;
+	int fileNameLength = 0;
+
+	fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) +strlen(".bin") + 1;
+	fileName= malloc(fileNameLength);
+
+	sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
+
+	FILE *fileDescriptor = fopen(fileName,"w+");
+	free(fileName);
+	close(fileDescriptor);
+	return EXIT_SUCCESS;
+
+}
+int fs_getFirstFreeBlock(t_FS *FS){
+	int counter = 0;
+	while(counter < FS->metadata.blockAmount){
+		if(!bitarray_test_bit(FS->bitmap,counter)){
+			return counter;
+		}
+		counter++;
+	}
+	return -1;
+}
+int fs_getNumberOfDigits(int number){
+	if(!number){
+		return 1;
+	}
+	int compare = number;
+	int counter = 0;
+	while(compare > 0){
+		compare = compare / 10;
+		counter++;
+	}
+	return counter;
+}
+
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
 
@@ -247,7 +332,12 @@ int main(int argc, char **argv) {
 
 
 
-	fs_mount(&myFS,myFS.mountDirectoryPath);
+	fs_mount(&myFS);
+
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
 
 	return EXIT_SUCCESS;
 }
