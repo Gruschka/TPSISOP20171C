@@ -23,10 +23,6 @@ typedef struct metadata{
 }t_FSMetadata;
 
 typedef struct FS{
-	DIR *mountDirectory;
-	DIR *metadataDirectory;
-	DIR *filesDirectory;
-	DIR *dataDirectory;
 	char *mountDirectoryPath;
 	char *MetadataDirectoryPath;
 	char *FSMetadataFileName;
@@ -64,7 +60,7 @@ int fs_createFile(char *path);
 int fs_createBlockFile(int blockNumber);
 int fs_getFirstFreeBlock(t_FS *FS);
 int fs_getNumberOfDigits(int number);
-
+int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C);
 
 extern t_FS myFS;
 
