@@ -60,7 +60,7 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
 	CPU->connections[T_MEMORY].host = "127.0.0.1";
-	CPU->connections[T_MEMORY].portNumber = 8888;
+	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
 	CPU->connections[T_MEMORY].status = DISCONNECTED;

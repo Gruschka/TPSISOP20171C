@@ -172,29 +172,6 @@ void ipc_client_sendFinishProgram(int fd, uint32_t pid) {
 	free(buffer);
 }
 
-void ipc_client_requestNewPage(int fd, uint32_t pid) {
-	ipc_struct_memory_new_page newPageRequest = { {MEMORY_NEW_PAGE}, pid };
-
-	send(fd, &newPageRequest, sizeof(ipc_struct_memory_new_page), 0);
-}
-
-ipc_struct_memory_new_page *ipc_memory_receiveNewPageRequest(int fd) {
-	ipc_header *header = malloc(sizeof(ipc_header));
-	ipc_struct_memory_new_page *response = malloc(sizeof(ipc_struct_memory_new_page));
-
-	int count = recv(fd, header, sizeof(ipc_header), MSG_PEEK);
-	if (count == sizeof(ipc_header) && header->operationIdentifier == MEMORY_NEW_PAGE) {
-		read(fd, response, sizeof(ipc_struct_memory_new_page));
-	} else {
-		free(header);
-		free(response);
-		return NULL;
-	}
-
-	free(header);
-	return response;
-}
-
 void ipc_client_sendGetSharedVariable(int fd, char *identifier) {
 	ipc_struct_get_shared_variable *request = malloc(sizeof(ipc_struct_get_shared_variable));
 
@@ -242,27 +219,6 @@ int ipc_client_waitSetSharedVariableValueResponse(int fd) {
 	return response.value;
 }
 
-
-void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset, int size, void *buffer) {
-	ipc_header header;
-
-	header.operationIdentifier = MEMORY_WRITE;
-
-	int totalSize = sizeof(ipc_header) + sizeof(int) * 4 + size;
-	void *buf = malloc(totalSize);
-
-	memcpy(buf, &header, sizeof(ipc_header));
-	memcpy(buf + sizeof(ipc_header), &pid, sizeof(int));
-	memcpy(buf + sizeof(ipc_header) + sizeof(int), &pageNumber, sizeof(int));
-	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int), &offset, sizeof(int));
-	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int), &size, sizeof(int));
-	//pid pagenumber offset size
-	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(int), buffer, size);
-
-
-	send(fd, buf, totalSize, 0);
-}
-
 void ipc_client_sendMemoryRead(int fd, int pid, int pageNumber, int offset, int size) {
 	ipc_struct_memory_read memoryRead;
 
@@ -295,4 +251,24 @@ ipc_struct_memory_read_response *ipc_client_waitMemoryReadResponse(int fd) {
 	response->buffer = buffer;
 
 	return response;
+}
+
+void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset, int size, void *buffer) {
+	ipc_header header;
+
+	header.operationIdentifier = MEMORY_WRITE;
+
+	int totalSize = sizeof(ipc_header) + sizeof(int) * 4 + size;
+	void *buf = malloc(totalSize);
+
+	memcpy(buf, &header, sizeof(ipc_header));
+	memcpy(buf + sizeof(ipc_header), &pid, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int), &pageNumber, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int), &offset, sizeof(int));
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int), &size, sizeof(int));
+	//pid pagenumber offset size
+	memcpy(buf + sizeof(ipc_header) + sizeof(int) + sizeof(int) + sizeof(int) + sizeof(int), buffer, size);
+
+
+	send(fd, buf, totalSize, 0);
 }
