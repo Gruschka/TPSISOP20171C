@@ -16,11 +16,15 @@ extern t_log *logger;
 void testFS() {
 	fs_init();
 
-	fs_permission_flags crwFlags = { .create = 1, .read = 1, .write = 1 };
-	fs_permission_flags rwFlags = { .create = 0, .read = 1, .write = 1 };
+//	fs_permission_flags crwFlags = { .create = 1, .read = 1, .write = 1 };
+//	fs_permission_flags rwFlags = { .create = 0, .read = 1, .write = 1 };
+//	fs_permission_flags rFlags = { .create = 0, .read = 1, .write = 0 };
 
-	fs_openFile(1, "/dev/null", crwFlags);
-	fs_openFile(2, "/dev/null", rwFlags);
+	fs_openFile(1, "/code/tp-sisop.sh", "r");
+	fs_openFile(0, "/code/tp-sisop.sh", "rw");
+	fs_openFile(0, "/dev/null", "rw");
+	fs_openFile(0, "/notas.txt", "r");
+	fs_openFile(1, "/cursos/z1234/alumnos.zip", "r");
 
 	fs_globalFileTable_dump();
 	fs_processFileTables_dump();
@@ -34,10 +38,11 @@ void fs_init() {
 	fs_processFileTables = list_create();
 }
 
-void fs_openFile(int pid, char *path, fs_permission_flags flags) {
+int fs_openFile(int pid, char *path, char *permissionsString) {
+	fs_permission_flags permissionFlags = permissions(permissionsString);
 	fs_pft *pft = pft_find(pid);
 
-	pft_addEntry(pft, pid, path, flags);
+	return pft_addEntry(pft, pid, path, permissionFlags);
 }
 
 // Debug
@@ -49,7 +54,7 @@ void fs_globalFileTable_dump() {
 
 	for (i = 0; i < list_size(fs_globalFileTable->entries); i++) {
 		fs_gft_entry *entry = list_get(fs_globalFileTable->entries, i);
-		log_debug(logger, "path: %s. open: %d", entry->path, entry->open);
+		log_debug(logger, "(%d) path: %s. open: %d", entry->_fd, entry->path, entry->open);
 	}
 }
 
@@ -61,12 +66,13 @@ void fs_processFileTables_dump() {
 	for (i = 0; i < list_size(fs_processFileTables); i++) {
 		fs_pft *pft = list_get(fs_processFileTables, i);
 
-		log_debug(logger, "Process File Table. pid: %d - # of entries: %d", pft->pid, list_size(pft->entries));
+		log_debug(logger, "[Process File Table. pid: %d]", pft->pid);
 
-		for (i = 0; i < list_size(pft->entries); i++) {
-			fs_pft_entry *entry = list_get(pft->entries, i);
+		int j;
+		for (j = 0; j < list_size(pft->entries); j++) {
+			fs_pft_entry *entry = list_get(pft->entries, j);
 
-			log_debug(logger, "fd: %d. flags: %d%d%d. (path: %s - open: %d)", entry->fd, entry->flags.create, entry->flags.read, entry->flags.write, entry->gftEntry->path, entry->gftEntry->open);
+			log_debug(logger, "-> fd: %d. flags: %d%d%d. (global fd: %d)", entry->fd, entry->flags.create, entry->flags.read, entry->flags.write, entry->gftEntry->_fd);
 		}
 	}
 }
@@ -96,14 +102,18 @@ fs_pft *pft_make(int pid) {
 	return pft;
 }
 
-void pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags) {
+int pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags) {
 	fs_pft_entry *entry = malloc(sizeof(fs_pft_entry));
 
 	entry->flags = flags;
 	entry->gftEntry = gft_findEntry(path);
 	entry->gftEntry->open++;
 
-	list_add(pft->entries, entry);
+	int idx = list_size(pft->entries);
+	entry->fd = idx + 3; // los fd empiezan en 3
+	list_add_in_index(pft->entries, idx, entry);
+
+	return idx;
 }
 
 fs_gft_entry *gft_findEntry(char *path) {
@@ -126,6 +136,46 @@ fs_gft_entry *gft_addEntry(char *path) {
 
 	entry->open = 0;
 
-	list_add(fs_globalFileTable->entries, entry);
+	int entriesCount = list_size(fs_globalFileTable->entries);
+	entry->_fd = entriesCount;
+	list_add_in_index(fs_globalFileTable->entries, entriesCount, entry);
 	return entry;
+}
+
+int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
+	fs_pft *table = pft_find(pid);
+
+	fs_pft_entry *entry = list_get(table->entries, fd);
+
+	if (entry == NULL) return 0;
+
+	switch (operation) {
+		case READ: return entry->flags.read == 1;
+		case WRITE: return entry->flags.write == 1;
+		case CREATE: return entry->flags.create == 1;
+	}
+
+	return 0;
+}
+
+fs_permission_flags permissions(char *permissionsString) {
+	fs_permission_flags flags = { .create = 0, .read = 0, .write = 0 };
+
+	char *chr = permissionsString;
+	while (chr != NULL && *chr != '\0') {
+		switch (*chr) {
+			case 'r':
+				flags.read = 1;
+				break;
+			case 'w':
+				flags.write = 1;
+				break;
+			case 'c':
+				flags.create = 1;
+				break;
+		}
+		++chr;
+	}
+
+	return flags;
 }
