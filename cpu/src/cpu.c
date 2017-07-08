@@ -40,6 +40,18 @@ void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t
 uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer){
 	memcpy(myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,buffer,size);
 }
+void *cpu_readMemory(int pid, int page, int offset, int size) {
+	int fd = myCPU.connections[T_MEMORY].socketFileDescriptor;
+
+	ipc_client_sendMemoryRead(fd, pid, page, offset, size);
+	return ipc_client_waitMemoryReadResponse(fd)->buffer;
+}
+
+void cpu_writeMemory(int pid, int page, int offset, int size, void *buffer) {
+	int fd = myCPU.connections[T_MEMORY].socketFileDescriptor;
+
+	ipc_client_sendMemoryWrite(fd, pid, page, offset, size, buffer);
+}
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
 	CPU->connections[T_KERNEL].host = "127.0.0.1";
