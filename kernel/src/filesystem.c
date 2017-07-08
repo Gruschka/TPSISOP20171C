@@ -22,9 +22,22 @@ void testFS() {
 
 	fs_openFile(1, "/code/tp-sisop.sh", "r");
 	fs_openFile(0, "/code/tp-sisop.sh", "rw");
-	fs_openFile(0, "/dev/null", "rw");
+	fs_openFile(0, "/dev/null", "rwc");
 	fs_openFile(0, "/notas.txt", "r");
 	fs_openFile(1, "/cursos/z1234/alumnos.zip", "r");
+
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: READ): %d", 1, 3, fs_isOperationAllowed(1, 3, READ));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: WRITE): %d", 1, 3, fs_isOperationAllowed(1, 3, WRITE));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: CREATE): %d", 1, 3, fs_isOperationAllowed(1, 3, CREATE));
+
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: READ): %d", 0, 3, fs_isOperationAllowed(0, 3, READ));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: WRITE): %d", 0, 3, fs_isOperationAllowed(0, 3, WRITE));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: CREATE): %d", 0, 3, fs_isOperationAllowed(0, 3, CREATE));
+
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: READ): %d", 0, 4, fs_isOperationAllowed(0, 4, READ));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: WRITE): %d", 0, 4, fs_isOperationAllowed(0, 4, WRITE));
+	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: CREATE): %d", 0, 4, fs_isOperationAllowed(0, 4, CREATE));
+
 
 	fs_globalFileTable_dump();
 	fs_processFileTables_dump();
@@ -40,9 +53,36 @@ void fs_init() {
 
 int fs_openFile(int pid, char *path, char *permissionsString) {
 	fs_permission_flags permissionFlags = permissions(permissionsString);
-	fs_pft *pft = pft_find(pid);
+	fs_pft *pft = pft_findOrCreate(pid);
 
 	return pft_addEntry(pft, pid, path, permissionFlags);
+}
+
+int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
+	fs_pft *table = pft_find(pid);
+
+	fs_pft_entry *entry = list_get(table->entries, fd - 3);
+
+	if (entry == NULL) return 0;
+
+	switch (operation) {
+		case READ: return entry->flags.read == 1;
+		case WRITE: return entry->flags.write == 1;
+		case CREATE: return entry->flags.create == 1;
+	}
+
+	return 0;
+}
+
+void *fs_readFile(int pid, int fd, int offset, int size) {
+	// TODO: Pedirle la data al FS
+	void *buffer = malloc(size);
+	memset(buffer, "-", size);
+	return buffer;
+}
+
+void fs_writeFile(int pid, int fd, int offset, int size, void *buffer) {
+	// TODO: Escribir la data en el FS
 }
 
 // Debug
@@ -79,6 +119,16 @@ void fs_processFileTables_dump() {
 
 // Private
 
+fs_pft *pft_findOrCreate(int pid) {
+	fs_pft *pft = pft_find(pid);
+
+	if (pft != NULL) return pft;
+
+	pft = pft_make(pid);
+	list_add(fs_processFileTables, pft);
+	return pft;
+}
+
 fs_pft *pft_find(int pid) {
 	int i;
 	for (i = 0; i < list_size(fs_processFileTables); i++) {
@@ -87,9 +137,7 @@ fs_pft *pft_find(int pid) {
 		if (pft->pid == pid) return pft;
 	}
 
-	fs_pft *pft = pft_make(pid);
-	list_add(fs_processFileTables, pft);
-	return pft;
+	return NULL;
 }
 
 fs_pft *pft_make(int pid) {
@@ -114,6 +162,18 @@ int pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags) {
 	list_add_in_index(pft->entries, idx, entry);
 
 	return idx;
+}
+
+fs_pft_entry *pft_findEntry(fs_pft *pft, int fd) {
+	int i = 0;
+
+	for (i = 0; i < list_size(pft->entries); i++) {
+		fs_pft_entry *entry = list_get(pft->entries, i);
+
+		if (entry->fd == fd) return entry;
+	}
+
+	return NULL;
 }
 
 fs_gft_entry *gft_findEntry(char *path) {
@@ -142,22 +202,6 @@ fs_gft_entry *gft_addEntry(char *path) {
 	return entry;
 }
 
-int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
-	fs_pft *table = pft_find(pid);
-
-	fs_pft_entry *entry = list_get(table->entries, fd);
-
-	if (entry == NULL) return 0;
-
-	switch (operation) {
-		case READ: return entry->flags.read == 1;
-		case WRITE: return entry->flags.write == 1;
-		case CREATE: return entry->flags.create == 1;
-	}
-
-	return 0;
-}
-
 fs_permission_flags permissions(char *permissionsString) {
 	fs_permission_flags flags = { .create = 0, .read = 0, .write = 0 };
 
@@ -178,4 +222,14 @@ fs_permission_flags permissions(char *permissionsString) {
 	}
 
 	return flags;
+}
+
+char *fs_getPath(int fd, int pid) {
+	fs_pft *pft = pft_find(pid);
+	if (pft == NULL) return NULL;
+
+	fs_pft_entry *entry = pft_findEntry(pft, fd);
+	if (entry == NULL) return NULL;
+
+	return entry->gftEntry->path;
 }
