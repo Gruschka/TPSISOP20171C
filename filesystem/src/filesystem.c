@@ -18,6 +18,7 @@
 #include <commons/config.h>
 #include <commons/log.h>
 #include <commons/bitarray.h>
+#include <commons/string.h>
 #include <errno.h>
 #include <math.h>
 #include "filesystem.h"
@@ -169,7 +170,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 	log_debug(logger,"Looking for metadata file");
 	if(metadataFileDescriptor = fopen(FS->FSMetadataFileName,"r+")){
 		log_debug(logger,"found metadata file, checking FS parameters");
-		checkMetadata = fs_getMetadataFromFile(metadataFileDescriptor);
+		checkMetadata = fs_getFSMetadataFromFile(metadataFileDescriptor);
 		if(checkMetadata.blockAmount == blockAmount && checkMetadata.blockSize == blockSize){
 			log_debug(logger,"metadata parameters match");
 			fclose(metadataFileDescriptor);
@@ -251,7 +252,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 	return EXIT_SUCCESS;
 
 }
-t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){ //Recupera valores del archivo Metadata
+t_FSMetadata fs_getFSMetadataFromFile(FILE *fileDescriptor){ //Recupera valores del archivo Metadata
 	char buffer[50];
 	char *blockSizeBuffer;//blockSizeBuffer = 0x1
 	char *blockAmountBuffer;
@@ -281,6 +282,47 @@ t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){ //Recupera valores de
 	return output;
 
 }
+
+t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
+
+		char lineBuffer[255];
+		char *metadataSizeBuffer;
+		char *metadataBlocksBuffer;
+		int * blocks;
+		t_FileMetadata output;
+
+		memset(lineBuffer,0,255);
+
+		fgets(lineBuffer,255,filePointer); // lineBuffer = TAMANIO=128
+		strtok_r(lineBuffer,"=",&metadataSizeBuffer); // lineBuffer = TAMANIO\0128 => lineBuffer = TAMANIO y metadataSizeBuffer = 128\n
+		output.size = atoi(metadataSizeBuffer);
+
+		memset(lineBuffer,0,255);
+
+		//strtok con igual => BLOQUES\0[4,1231,5,1,0,12,543]
+		fgets(lineBuffer,255,filePointer);
+		strtok_r(lineBuffer,"=",&metadataBlocksBuffer);
+
+		char *stringArray = malloc(strlen(metadataBlocksBuffer));
+		memset(stringArray,0,strlen(metadataBlocksBuffer)+1);
+		memcpy(stringArray,metadataBlocksBuffer,strlen(metadataBlocksBuffer)-1);
+
+		output.blocks = fs_getArrayFromString(&stringArray,(output.size +(myFS.metadata.blockSize -1))/myFS.metadata.blockSize);
+
+		if(output.blocks == -1){
+
+			log_error(logger, "Critical error reading blocks");
+			return output;
+		}
+
+		free(stringArray);
+
+		return output;
+
+
+
+}
+//recibe [4,1231,5,1,0,12,543] devuelve int*
 int fs_validateFile(char *path){ //Se fija si un path existe
 	FILE *fileDescriptor;
 	if(fileDescriptor = fopen(path,"r+")){
@@ -325,6 +367,25 @@ int fs_createBlockFile(int blockNumber){
 	return EXIT_SUCCESS;
 
 }
+int fs_deleteBlockFile(int blockNumber){
+
+	char *fileName;
+	int fileNameLength = 0;
+
+	fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) + strlen(".bin") + 1;
+	fileName = malloc(fileNameLength);
+
+	sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
+
+	remove(fileName);
+	free(fileName);
+
+	return EXIT_SUCCESS;
+
+
+
+
+}
 int fs_getFirstFreeBlock(t_FS *FS){
 	int counter = 0;
 	while(counter < FS->metadata.blockAmount){
@@ -354,6 +415,110 @@ int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C){ //El tamanio de
 	fwrite(buffer,N,1,fileDescriptor);
 	return EXIT_SUCCESS;
 }
+int *fs_getArrayFromString(char **stringArray, int numberOfBlocks){
+	//[0]
+	char *token;
+	int blockBuffer;
+	int *array = malloc(sizeof(int)*numberOfBlocks);
+
+
+
+	//Removes brackets from stringArray and saves blocks on stringPointer
+	char*stringPointer = string_substring_from(*stringArray ,1); //string_substring returns a pointer to a different direction
+	stringPointer  = string_substring_until(stringPointer ,strlen(stringPointer)-1);
+
+
+	//Takes first block from stringPointer
+	token = strtok(stringPointer,",");
+
+	if(!token){
+		return -1;
+	}
+
+	//Saves in buffer the value from token as an int
+	blockBuffer = atoi(token);
+
+	//Saves the new block on the array pointer
+	array[0] = blockBuffer;
+	int iterator =1;
+
+	//Iterates from the last position of the token pointer (NULL)
+	while(token != NULL){
+
+		token = strtok(NULL,",");
+		if(token!=NULL){
+			blockBuffer = atoi(token);
+			array[iterator] = blockBuffer;
+			iterator++;
+		}
+
+	}
+
+	return array;
+}
+int fs_removeFile(char* filePath){
+
+	if(fs_validateFile(filePath)){ //If the path is invalid
+			log_error(logger, "Path invalido - No se puede eliminar archivo");
+			return EXIT_FAILURE;
+	}
+
+	FILE *filePointer = fopen(filePath, "r+");
+	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
+
+
+
+	//Borrar bloques
+	int iterator = 0;
+	int numberOfBlocks = (fileMetadata.size + (myFS.metadata.blockSize -1)) / myFS.metadata.blockSize;
+	while(iterator < numberOfBlocks){
+		fs_deleteBlockFile(fileMetadata.blocks[iterator]);
+		iterator++;
+	}
+
+	//Liberar bitmap
+	iterator = 0;
+	while(iterator < numberOfBlocks){
+		bitarray_clean_bit(myFS.bitmap, fileMetadata.blocks[iterator]);
+		iterator++;
+	}
+
+
+	fclose(filePointer);
+
+	//Borrar metadata
+	remove(filePath);
+
+}
+void fs_dump(){
+	printf("FS Metadata File Name: %s\n",myFS.FSMetadataFileName);
+	printf("FS Metadata Directory Path: %s\n",myFS.MetadataDirectoryPath);
+	printf("FS bitmap file descriptor: %d\n",myFS.bitmapFileDescriptor);
+	printf("FS Bitmap File Name: %s\n",myFS.bitmapFileName);
+	printf("FS data directory path: %s\n",myFS.dataDirectoryPath);
+	printf("FS Files directory path: %s\n",myFS.filesDirectoryPath);
+	printf("FS block amount: %d\n",myFS.metadata.blockAmount);
+	printf("FS block size: %d\n",myFS.metadata.blockSize);
+	printf("FS magic number: %s\n",myFS.metadata.magicNumber);
+	printf("FS Mount path: %s\n",myFS.mountDirectoryPath);
+	printf("BITMAP\n");
+
+	int i = 0;
+	int unBit = 0;
+
+	while(i < myFS.metadata.blockAmount){
+		unBit = bitarray_test_bit(myFS.bitmap,i);
+		printf("%d",unBit);
+		i++;
+	}
+
+	fflush(stdout);
+
+
+
+
+
+}
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -375,10 +540,16 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
+
+	fs_dump();
+
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
+	fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+
+	fs_dump();
 
 	return EXIT_SUCCESS;
 }
