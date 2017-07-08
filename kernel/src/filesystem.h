@@ -51,6 +51,7 @@ fs_gft *fs_globalFileTable;
 // Public
 void fs_init();
 int fs_openFile(int pid, char *path, char *permissionsString);
+void fs_closeFile(int pid, int fd);
 void *fs_readFile(int pid, int fd, int offset, int size);
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer);
 int fs_isOperationAllowed(int pid, int fd, fs_operation operation);
@@ -66,6 +67,8 @@ fs_pft *pft_find(int pid);
 fs_gft_entry *gft_findEntry(char *path);
 int pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags);
 fs_gft_entry *gft_addEntry(char *path);
+void gft_removeEntry(fs_gft_entry *entry);
 fs_permission_flags permissions(char *permissionsString);
+char *fs_getPath(int fd, int pid);
 
 #endif /* FILESYSTEM_H_ */

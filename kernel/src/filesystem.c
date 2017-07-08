@@ -13,6 +13,8 @@
 
 extern t_log *logger;
 
+//TODO: Cuando agrego una entrada nueva a ambas estructuras, incrementar el anterior y no usar el indice para el fd
+
 void testFS() {
 	fs_init();
 
@@ -41,6 +43,15 @@ void testFS() {
 
 	fs_globalFileTable_dump();
 	fs_processFileTables_dump();
+
+	fs_closeFile(0, 4);
+
+	fs_globalFileTable_dump();
+	fs_processFileTables_dump();
+
+	void *buf = fs_readFile(0, 3, 0, 100);
+	buf = fs_readFile(1, 4, 0, 20);
+	log_debug(logger, "buf: %s", buf);
 }
 
 void fs_init() {
@@ -76,9 +87,30 @@ int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
 
 void *fs_readFile(int pid, int fd, int offset, int size) {
 	// TODO: Pedirle la data al FS
+	char *path = fs_getPath(fd, pid);
+	log_debug(logger, "fs_readfile. path: %s", path);
 	void *buffer = malloc(size);
-	memset(buffer, "-", size);
+	memset(buffer, '-', size);
 	return buffer;
+}
+
+void fs_closeFile(int pid, int fd) {
+	fs_pft *pft = pft_find(pid);
+	int i = 0;
+
+	for (i = 0; i < list_size(pft->entries); i++) {
+		fs_pft_entry *entry = list_get(pft->entries, i);
+
+		if (entry->fd == fd) {
+			entry = list_remove(pft->entries, i);
+
+			if (--(entry->gftEntry->open) == 0) {
+				gft_removeEntry(entry->gftEntry);
+			}
+
+			return;
+		}
+	}
 }
 
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer) {
@@ -106,7 +138,7 @@ void fs_processFileTables_dump() {
 	for (i = 0; i < list_size(fs_processFileTables); i++) {
 		fs_pft *pft = list_get(fs_processFileTables, i);
 
-		log_debug(logger, "[Process File Table. pid: %d]", pft->pid);
+		log_debug(logger, "Process File Table. pid: %d", pft->pid);
 
 		int j;
 		for (j = 0; j < list_size(pft->entries); j++) {
@@ -200,6 +232,25 @@ fs_gft_entry *gft_addEntry(char *path) {
 	entry->_fd = entriesCount;
 	list_add_in_index(fs_globalFileTable->entries, entriesCount, entry);
 	return entry;
+}
+
+void fs_gft_entry_destroy(void *arg) {
+	fs_gft_entry *entry = arg;
+	free(entry->path);
+	free(entry);
+}
+
+void gft_removeEntry(fs_gft_entry *entry) {
+	log_debug(logger, "gft_removeEntry. entry->path = %s", entry->path);
+	int idx = 0;
+
+	for (idx = 0; idx < list_size(fs_globalFileTable->entries); idx++) {
+		fs_gft_entry *e = list_get(fs_globalFileTable->entries, idx);
+
+		if (e->_fd == entry->_fd) break;
+	}
+
+	list_remove_and_destroy_element(fs_globalFileTable->entries, idx, fs_gft_entry_destroy);
 }
 
 fs_permission_flags permissions(char *permissionsString) {
