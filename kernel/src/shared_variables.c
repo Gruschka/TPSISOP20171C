@@ -15,9 +15,9 @@ extern t_list *sharedVariables;
 
 shared_variable *createSharedVariable(char *identifier) {
 	shared_variable *variable = malloc(sizeof(shared_variable));
-	char *identifierBuf = malloc(strlen(identifier) + 1);
+	char *identifierBuf = malloc(strlen(identifier));
 
-	memcpy(identifierBuf, identifier, strlen(identifier) + 1);
+	memcpy(identifierBuf, identifier + 1, strlen(identifier));
 	variable->identifier = identifierBuf;
 	variable->value = 0;
 	pthread_mutex_init(&variable->mutex, NULL);
