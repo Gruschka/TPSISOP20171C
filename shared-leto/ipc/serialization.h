@@ -21,8 +21,6 @@ typedef enum {
 	PROGRAM_START,
 	PROGRAM_START_RESPONSE,
 	PROGRAM_FINISH,
-	MEMORY_NEW_PAGE,
-	MEMORY_NEW_PAGE_RESPONSE,
 	GET_SHARED_VARIABLE,
 	GET_SHARED_VARIABLE_RESPONSE,
 	SET_SHARED_VARIABLE,
@@ -34,6 +32,10 @@ typedef enum {
 	MEMORY_READ_RESPONSE,
 	MEMORY_WRITE,
 	MEMORY_WRITE_RESPONSE,
+	MEMORY_REQUEST_MORE_PAGES,
+	MEMORY_REQUEST_MORE_PAGES_RESPONSE,
+	MEMORY_DEINIT_PROGRAM,
+	MEMORY_DEINIT_PROGRAM_RESPONSE,
 	CPU_EXECUTE_PROGRAM,
 	KERNEL_SEMAPHORE_WAIT,
 	KERNEL_SEMAPHORE_WAIT_RESPONSE
@@ -73,16 +75,6 @@ typedef struct program_finish {
 	ipc_header header;
 	uint32_t pid;
 } __attribute__((packed)) ipc_struct_program_finish;
-
-typedef struct memory_new_page {
-	ipc_header header;
-	uint32_t pid;
-} __attribute__((packed)) ipc_struct_memory_new_page;
-
-typedef struct memory_new_page_response {
-	ipc_header header;
-	char success;
-} __attribute__((packed)) ipc_struct_memory_new_page_response;
 
 typedef struct get_shared_variable {
 	ipc_header header;
@@ -147,6 +139,29 @@ typedef struct memory_write_program_response {
 	ipc_header header;
 	char success;
 } __attribute__((packed)) ipc_struct_memory_write_response;
+
+typedef struct memory_request_more_pages {
+	ipc_header header;
+	int pid;
+	int numberOfPages;
+} __attribute__((packed)) ipc_struct_memory_request_more_pages;
+
+//FIXME cambiar esto para q me mande el pid y evitar que sea bloqueante el pedido de páginas
+typedef struct memory_request_more_pages_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_request_more_pages_response;
+
+typedef struct memory_deinit_program {
+	ipc_header header;
+	int pid;
+} __attribute__((packed)) ipc_struct_memory_deinit_program;
+
+//FIXME cambiar esto para q me mande el pid y evitar que sea bloqueante la desinicializacion
+typedef struct memory_deinit_program_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_deinit_program_response;
 
 typedef struct kernel_semaphore_wait {
 	ipc_header header;

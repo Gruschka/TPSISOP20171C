@@ -8,7 +8,6 @@
  ============================================================================
  */
 
-// TODO: integración con IPC
 // TODO: consola: falta dar size de un proceso en particular (¿a qué se refiere?)
 
 #include <stdio.h>
@@ -367,9 +366,9 @@ void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int
 	// los datos en la cache
 	void *cache = cache_read(processID, processPageNumber);
 	if (cache != NULL) {
+		void *pointer = cache + offset;
 		void *buffer = malloc(size);
-		void *ptr = cache + offset;
-		memcpy(buffer, ptr, size);
+		memcpy(buffer, pointer, size);
 		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return buffer;
 	}
@@ -454,8 +453,9 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 	return 1;
 }
 
-void mem_deinitProcess(int32_t processID) {
+int mem_deinitProcess(int32_t processID) {
 	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+	pthread_rwlock_wrlock(&cacheMemoryRwlock);
 
 	// Primero destruimos las entradas de las páginas
 	// de la memoria física
@@ -480,6 +480,8 @@ void mem_deinitProcess(int32_t processID) {
 	}
 
 	pthread_rwlock_unlock(&physicalMemoryRwlock);
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
+	return 1;
 }
 
 //////// Fin de interfaz pública
@@ -829,6 +831,32 @@ void *connection_handler(void *shit) {
 			send(sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
 			break;
 		}
+		case MEMORY_REQUEST_MORE_PAGES: {
+			ipc_struct_memory_request_more_pages request;
+			recv(sockfd, &request, sizeof(ipc_struct_memory_request_more_pages), 0);
+			log_debug(consoleLog, "Request more pages for program. pid: %d. numberOfPages: %d", request.pid, request.numberOfPages);
+			int result = mem_addPagesToProcess(request.pid, request.numberOfPages);
+
+			ipc_struct_memory_request_more_pages_response response;
+			response.header.operationIdentifier = MEMORY_REQUEST_MORE_PAGES_RESPONSE;
+			response.success = result > 0 ? 1 : 0;
+
+			send(sockfd, &response, sizeof(ipc_struct_memory_request_more_pages_response), 0);
+			break;
+		}
+		case MEMORY_DEINIT_PROGRAM: {
+			ipc_struct_memory_deinit_program request;
+			recv(sockfd, &request, sizeof(ipc_struct_memory_deinit_program), 0);
+			log_debug(consoleLog, "Denit program. pid: %d.", request.pid);
+			int result = mem_deinitProcess(request.pid);
+
+			ipc_struct_memory_deinit_program_response response;
+			response.header.operationIdentifier = MEMORY_DEINIT_PROGRAM_RESPONSE;
+			response.success = result > 0 ? 1 : 0;
+
+			send(sockfd, &response, sizeof(ipc_struct_memory_deinit_program_response), 0);
+			break;
+		}
 		default:
 			break;
 		}
@@ -851,7 +879,7 @@ void *serverThread_main(void *mierda) {
 	//Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
-	server.sin_port = htons(8888);
+	server.sin_port = htons(k_connectionPort);
 
 	//Bind
 	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
