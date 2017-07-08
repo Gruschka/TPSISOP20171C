@@ -27,7 +27,7 @@ t_config *config;
 t_log *logger;
 t_FS myFS;
 
-int fs_loadConfig(t_FS *FS){
+int fs_loadConfig(t_FS *FS){ //Llena la estructura del FS segun el archivo config
 
 	//char *mount = config_get_string_value(config,"PUNTO_MONTAJE");
 
@@ -80,7 +80,7 @@ int fs_loadConfig(t_FS *FS){
 	FS->metadata.magicNumber = "SADICA";
 	return 0;
 }
-int fs_mount(t_FS *FS){
+int fs_mount(t_FS *FS){  //Crea el mount path
 	DIR *mountDirectory = opendir(myFS.mountDirectoryPath);
 
 	//check if mount path exists then open
@@ -138,7 +138,7 @@ int fs_mount(t_FS *FS){
 	return EXIT_SUCCESS;
 
 }
-int fs_openOrCreateMetadata(t_FS *FS){
+int fs_openOrCreateMetadata(t_FS *FS){ //Abre o crea la carpeta Metadata
 	// open/create metadata dir
 	DIR *metadataDirectory;
 	metadataDirectory = opendir(FS->MetadataDirectoryPath);
@@ -159,7 +159,7 @@ int fs_openOrCreateMetadata(t_FS *FS){
 	fs_openOrCreateMetadataFiles(FS,FS->metadata.blockSize,FS->metadata.blockAmount,FS->metadata.magicNumber);
 	return EXIT_SUCCESS;
 }
-int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char *magicNumber){
+int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char *magicNumber){ //Abre o crea archivos Metadata.bin y Bitmap.bin
 	FILE *metadataFileDescriptor;
 	FILE *bitmapFileDescriptor;
 	char buffer[50];
@@ -251,7 +251,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 	return EXIT_SUCCESS;
 
 }
-t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){
+t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){ //Recupera valores del archivo Metadata
 	char buffer[50];
 	char *blockSizeBuffer;//blockSizeBuffer = 0x1
 	char *blockAmountBuffer;
@@ -281,7 +281,7 @@ t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor){
 	return output;
 
 }
-int fs_validateFile(char *path){
+int fs_validateFile(char *path){ //Se fija si un path existe
 	FILE *fileDescriptor;
 	if(fileDescriptor = fopen(path,"r+")){
 		close(fileDescriptor);
@@ -291,20 +291,22 @@ int fs_validateFile(char *path){
 		return EXIT_FAILURE;
 	}
 }
-int fs_createFile(char *path){
+int fs_createFile(char *path){ //Crea archivo nuevo
 	FILE *newFileDescriptor;
 	size_t firstFreeBlock;
 	char bloques[50];
 	memset(bloques,0,50);
 
 	if(fs_validateFile(path)){
-		newFileDescriptor = fopen(path,"w+");
+		newFileDescriptor = fopen(path,"w+"); //Crea archivo Metadata del archivo nuevo
 		firstFreeBlock = fs_getFirstFreeBlock(&myFS);
+		if(firstFreeBlock == -1) return -1;
 		fputs("TAMANIO=0\n",newFileDescriptor);
 		sprintf(bloques,"BLOQUES=[%d]\n",firstFreeBlock);
 		fputs(bloques,newFileDescriptor);
 		fs_createBlockFile(firstFreeBlock);
 		bitarray_set_bit(myFS.bitmap,firstFreeBlock);
+		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
 }
@@ -319,7 +321,7 @@ int fs_createBlockFile(int blockNumber){
 
 	FILE *fileDescriptor = fopen(fileName,"w+");
 	free(fileName);
-	close(fileDescriptor);
+	fclose(fileDescriptor);
 	return EXIT_SUCCESS;
 
 }
@@ -345,7 +347,7 @@ int fs_getNumberOfDigits(int number){
 	}
 	return counter;
 }
-int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C){
+int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C){ //El tamanio del archivo antes del mmap matchea con el tamanio del bitmap
 	char *buffer = malloc(N);
 
 	memset(buffer,C,N);
