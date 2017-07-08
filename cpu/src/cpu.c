@@ -413,15 +413,59 @@ int main() {
 
 	// connect to memory -- DUMMY
 	cpu_connect(&myCPU,T_MEMORY);
-
+	cpu_connect(&myCPU,T_KERNEL);
 //	char *testProgram = strdup(program);
 //	//printf("writing program: %s", testProgram);
 //	memcpy(myMemory,testProgram,strlen(testProgram));
 
-	cpu_connect(&myCPU,T_KERNEL);
+
 
    //wait for PCB
-   myCPU.status = WAITING;
+	while (1) {
+		myCPU.status = WAITING;
+
+		ipc_header header;
+		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &header, sizeof(ipc_header), 0);
+
+		int quantum;
+		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &quantum, sizeof(int), 0);
+
+		int serializedSize;
+		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &serializedSize, sizeof(int), 0);
+
+		t_PCBVariableSize *variableSize = malloc(sizeof(t_PCBVariableSize));
+		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableSize, sizeof(t_PCBVariableSize), MSG_PEEK);
+
+		uint32_t serializedPCBSize = pcb_getBufferSizeFromVariableSize(variableSize);
+
+		void *pcbBuffer = malloc(serializedPCBSize);
+		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, pcbBuffer, serializedPCBSize, 0);
+		t_PCB *pcbToExecute = pcb_deSerializePCB(pcbBuffer, variableSize);
+
+		myCPU.assignedPCB = pcbToExecute;
+		myCPU.quantum = quantum;
+		myCPU.status = RUNNING;
+
+		while(myCPU.status == RUNNING && myCPU.quantum > 0){
+			   //cpu fetch
+			   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
+			   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
+			   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
+
+			   char *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
+			   instruction[currentInstructionIndex.size]='\0';
+			   fflush(stdout);
+			   printf("fetched instruction is: %s\n",(char *) instruction);
+			   fflush(stdout);
+
+			   //cpu decode & execute
+			   analizadorLinea(instruction,&functions,&kernel_functions);
+
+			   myCPU.quantum--;
+			   myCPU.instructionPointer++;
+		   }
+	}
+
 
 
 
@@ -432,44 +476,27 @@ int main() {
 //
 //   pcb_destroy(dummyPCB);
 //
-   t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
-   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableInfo, sizeof(t_PCBVariableSize), 0);
-
-   uint32_t size = pcb_getBufferSizeFromVariableSize(variableInfo);
-
-   void *bafer = malloc(size);
-   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, bafer, size, 0);
-//   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
+//   t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
+//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableInfo, sizeof(t_PCBVariableSize), 0);
 //
-//   // PCB received
-   t_PCB *newPCB = pcb_deSerializePCB(bafer, variableInfo);
-
-   pcb_dump(newPCB);
-
-
-   myCPU.assignedPCB = newPCB;
-   myCPU.status = RUNNING;
-   myCPU.quantum = 9999;
+//   uint32_t size = pcb_getBufferSizeFromVariableSize(variableInfo);
+//
+//   void *bafer = malloc(size);
+//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, bafer, size, 0);
+////   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
+////
+////   // PCB received
+//   t_PCB *newPCB = pcb_deSerializePCB(bafer, variableInfo);
+//
+//   pcb_dump(newPCB);
+//
+//
+//   myCPU.assignedPCB = newPCB;
+//   myCPU.status = RUNNING;
+//   myCPU.quantum = 9999;
 
    //instruction cycle
-   while(myCPU.status == RUNNING && myCPU.quantum > 0){
-	   //cpu fetch
-	   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
-	   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
-	   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
 
-	   char *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
-	   instruction[currentInstructionIndex.size]='\0';
-	   fflush(stdout);
-	   printf("fetched instruction is: %s\n",(char *) instruction);
-	   fflush(stdout);
-
-	   //cpu decode & execute
-	   analizadorLinea(instruction,&functions,&kernel_functions);
-
-	   myCPU.quantum--;
-	   myCPU.instructionPointer++;
-   }
 
 
 	return EXIT_SUCCESS;

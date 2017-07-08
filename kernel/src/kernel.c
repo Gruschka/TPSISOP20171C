@@ -469,6 +469,31 @@ void *scheduler_mainFunction(void) {
 	return 0;
 }
 
+void sendExecutePCB(int fd, t_PCB *pcb, int quantum) {
+	void *pcbBuffer = pcb_serializePCB(pcb);
+
+	ipc_header *header = malloc(sizeof(ipc_header));
+	header->operationIdentifier = CPU_EXECUTE_PROGRAM;
+
+	int pcbSize = pcb_getPCBSize(pcb);
+
+//	request->serializedSize = pcbSize;
+//	request->serializedPCB = malloc(pcbSize);
+//	memcpy(request->serializedPCB, buffer, pcbSize);
+
+	int totalSize = sizeof(ipc_header) + sizeof(int) + sizeof(int) + pcbSize;
+
+	void *buffer = malloc(totalSize);
+	memcpy(buffer, header, sizeof(ipc_header));
+	memcpy(buffer + sizeof(ipc_header), &quantum, sizeof(int));
+	memcpy(buffer + sizeof(ipc_header) + sizeof(int), &pcbSize, sizeof(int));
+	memcpy(buffer + sizeof(ipc_header) + sizeof(int) + sizeof(int), pcbBuffer, pcbSize);
+
+	send(fd, buffer, totalSize, 0);
+
+	free(buffer);
+}
+
 void *dispatcher_mainFunction(void) {
 	while (1) {
 		log_debug(logger, "[dispatcher] waiting for programs in ready q");
@@ -478,10 +503,10 @@ void *dispatcher_mainFunction(void) {
 		pthread_mutex_lock(&execList_mutex);
 		pthread_mutex_lock(&readyQueue_mutex);
 		t_PCB *program = readyQueue_popProcess();
-//		t_PCB *program = pcb_createDummy(1, 2, 3, 4
-		void *pcbBuffer = pcb_serializePCB(program);
+//		void *pcbBuffer = pcb_serializePCB(program);
 		t_CPUx *availableCPU = getAvailableCPU();
-		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
+		sendExecutePCB(availableCPU->fd, program, 5);
+//		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
 		log_debug(logger,
 				"[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
 				program->pid, availableCPU->fd, pcb_getPCBSize(program));

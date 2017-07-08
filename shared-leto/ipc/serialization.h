@@ -9,6 +9,7 @@
 #define SERIALIZATION_H_
 
 #include <stdint.h>
+#include "../pcb/pcb.h"
 
 typedef struct header {
 	uint32_t operationIdentifier;
@@ -32,7 +33,10 @@ typedef enum {
 	MEMORY_READ,
 	MEMORY_READ_RESPONSE,
 	MEMORY_WRITE,
-	MEMORY_WRITE_RESPONSE
+	MEMORY_WRITE_RESPONSE,
+	CPU_EXECUTE_PROGRAM,
+	KERNEL_SEMAPHORE_WAIT,
+	KERNEL_SEMAPHORE_WAIT_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -143,6 +147,19 @@ typedef struct memory_write_program_response {
 	ipc_header header;
 	char success;
 } __attribute__((packed)) ipc_struct_memory_write_response;
+
+typedef struct kernel_semaphore_wait {
+	ipc_header header;
+	int identifierLength;
+	char *identifier;
+} __attribute__((packed)) ipc_struct_kernel_semaphore_wait;
+
+typedef struct cpu_execute_program {
+	ipc_header header;
+	int quantum;
+	int serializedSize;
+	void *serializedPCB;
+} __attribute__((packed)) ipc_struct_cpu_execute_program;
 
 ipc_struct_handshake *ipc_deserialize_handshake(void *buffer);
 
