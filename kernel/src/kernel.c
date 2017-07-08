@@ -211,7 +211,7 @@ int memory_sendInitProgram(int pid, int numberOfPages) {
 }
 
 int main(int argc, char **argv) {
-	char *logFile = tmpnam(NULL );
+	char *logFile = tmpnam(NULL);
 
 #ifdef DEBUG
 	logger = log_create(logFile, "KERNEL", 1, LOG_LEVEL_DEBUG);
@@ -474,8 +474,8 @@ void *dispatcher_mainFunction(void) {
 		sem_wait(&exec_spaces);
 		pthread_mutex_lock(&execList_mutex);
 		pthread_mutex_lock(&readyQueue_mutex);
-//		t_PCB *program = readyQueue_popProcess();
-		t_PCB *program = pcb_createDummy(1, 2, 3, 4);
+		t_PCB *program = readyQueue_popProcess();
+//		t_PCB *program = pcb_createDummy(1, 2, 3, 4
 		void *pcbBuffer = pcb_serializePCB(program);
 		t_CPUx *availableCPU = getAvailableCPU();
 		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);

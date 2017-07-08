@@ -85,7 +85,6 @@ void ipc_client_sendHandshake(ipc_processIdentifier processIdentifier, int fd) {
 	handshake->processIdentifier = processIdentifier;
 	handshake->header.operationIdentifier = HANDSHAKE;
 
-	log_debug(logger, "ipc_client_sendHandshake. size: %d", sizeof(ipc_struct_handshake));
 	send(fd, handshake, sizeof(ipc_struct_handshake), 0);
 	free(handshake);
 }

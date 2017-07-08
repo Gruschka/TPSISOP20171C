@@ -48,7 +48,7 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
 	CPU->connections[T_MEMORY].host = "127.0.0.1";
-	CPU->connections[T_MEMORY].portNumber = 5003;
+	CPU->connections[T_MEMORY].portNumber = 8888;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
 	CPU->connections[T_MEMORY].status = DISCONNECTED;
@@ -132,8 +132,8 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 				  exit(1);
 			   }
 
-			   ipc_client_sendHandshake(CPU, memoryConnection->socketFileDescriptor);
-			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
+//			   ipc_client_sendHandshake(CPU, memoryConnection->socketFileDescriptor);
+//			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
 			   free(response);
 			   memoryConnection->status = CONNECTED;
 			   printf("CONNECTED TO Memory");
@@ -394,39 +394,45 @@ char *program =
  };
 
 int main() {
+	char *logfile = tmpnam(NULL);
+	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
 	// start CPU
 	cpu_start(&myCPU);
 
 	// connect to memory -- DUMMY
 	cpu_connect(&myCPU,T_MEMORY);
 
-	char *testProgram = strdup(program);
-	//printf("writing program: %s", testProgram);
-	memcpy(myMemory,testProgram,strlen(testProgram));
+//	char *testProgram = strdup(program);
+//	//printf("writing program: %s", testProgram);
+//	memcpy(myMemory,testProgram,strlen(testProgram));
 
 	cpu_connect(&myCPU,T_KERNEL);
-
-	char *logfile = tmpnam(NULL);
-
-	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
 
    //wait for PCB
    myCPU.status = WAITING;
 
+
+
    //generate PCB
-   t_PCB *dummyPCB = cpu_createPCBFromScript(testProgram);
-
-   void *serializedPCB = pcb_serializePCB(dummyPCB);
-
-   pcb_destroy(dummyPCB);
-
+//   t_PCB *dummyPCB = cpu_createPCBFromScript(testProgram);
+//
+//   void *serializedPCB = pcb_serializePCB(dummyPCB);
+//
+//   pcb_destroy(dummyPCB);
+//
    t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
-   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
+   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableInfo, sizeof(t_PCBVariableSize), 0);
 
-   // PCB received
-   t_PCB *newPCB = pcb_deSerializePCB(serializedPCB,variableInfo);
+   uint32_t size = pcb_getBufferSizeFromVariableSize(variableInfo);
 
-   //pcb_dump(newPCB);
+   void *bafer = malloc(size);
+   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, bafer, size, 0);
+//   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
+//
+//   // PCB received
+   t_PCB *newPCB = pcb_deSerializePCB(bafer, variableInfo);
+
+   pcb_dump(newPCB);
 
 
    myCPU.assignedPCB = newPCB;
