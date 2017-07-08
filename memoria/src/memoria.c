@@ -784,7 +784,7 @@ void *connection_handler(void *shit) {
 			log_debug(consoleLog, "Read page; pid: %d; pageNumber: %d; offset: %d; size: %d", request.pid, request.pageNumber, request.offset, request.size);
 			void *buffer = mem_read(request.pid, request.pageNumber, request.offset, request.size);
 
-			int success = buffer != NULL;
+			int success = buffer != NULL ? 1 : 0;
 
 			ipc_struct_memory_read_response response;
 			response.header.operationIdentifier = MEMORY_READ_RESPONSE;
