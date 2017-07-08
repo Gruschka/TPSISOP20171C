@@ -368,7 +368,8 @@ void *mem_read(int32_t processID, int32_t processPageNumber, int32_t offset, int
 	void *cache = cache_read(processID, processPageNumber);
 	if (cache != NULL) {
 		void *buffer = malloc(size);
-		memcpy(buffer, cache, size);
+		void *ptr = cache + offset;
+		memcpy(buffer, ptr, size);
 		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		return buffer;
 	}
@@ -510,7 +511,7 @@ void size_logMemorySize() {
 void dump_cache() {
 	pthread_rwlock_rdlock(&cacheMemoryRwlock);
 	char *logPath = "./src/cache_dump.txt";
-	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
+	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
 
 	int i;
 	for (i = 0; i < k_numberOfEntriesInCache; i++) {
@@ -783,16 +784,25 @@ void *connection_handler(void *shit) {
 			recv(sockfd, &request, sizeof(ipc_struct_memory_read), 0);
 			log_debug(consoleLog, "Read page; pid: %d; pageNumber: %d; offset: %d; size: %d", request.pid, request.pageNumber, request.offset, request.size);
 			void *buffer = mem_read(request.pid, request.pageNumber, request.offset, request.size);
+			log_debug(consoleLog, "Content: %s", buffer);
 
-			int success = buffer != NULL ? 1 : 0;
+			char success = buffer != NULL ? 1 : 0;
 
-			ipc_struct_memory_read_response response;
-			response.header.operationIdentifier = MEMORY_READ_RESPONSE;
-			response.success = success;
-			response.size = request.size;
-			response.buffer = buffer;
+			int totalSize = sizeof(ipc_header) + sizeof(char) + sizeof(int) + request.size;
+			void *buf = malloc(totalSize);
 
-			send(sockfd, &response, sizeof(ipc_struct_memory_read_response) - sizeof(void *) + request.size, 0);
+			ipc_header responseHeader;
+			responseHeader.operationIdentifier = MEMORY_READ_RESPONSE;
+
+			memcpy(buf, &responseHeader, sizeof(ipc_header));
+			memcpy(buf + sizeof(ipc_header), &success, sizeof(char));
+			memcpy(buf + sizeof(ipc_header) + sizeof(char), &(request.size), sizeof(int));
+			memcpy(buf + sizeof(ipc_header) + sizeof(char) + sizeof(int), buffer, request.size);
+
+
+			send(sockfd, buf, totalSize, 0);
+			free(buf);
+			free(buffer);
 
 			break;
 		}
