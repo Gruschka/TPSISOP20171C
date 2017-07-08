@@ -10,11 +10,9 @@
 
 
 #include "consola.h"
-#include <stdio.h>
-#include <stdlib.h>
+
+
 #include <sys/socket.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -26,8 +24,7 @@
 #include <ipc/serialization.h>
 #include <ipc/ipc.h>
 #include <signal.h>
-#include <pthread.h>
-#include <time.h>
+
 
 t_config *consoleConfig;
 t_log *logger;
@@ -36,20 +33,6 @@ char *serverIp = 0;
 t_list * processList;
 
 
-typedef struct t_process {
-	pthread_t threadID;
-	uint32_t processId;
-	int kernelSocket,consoleImpressions;
-	time_t startTime,endTime;
-	struct t_process * processMemoryAddress;
-} t_process;
-
-// Senial para matar threads
-void programThread_sig_handler(int signo) {
-
-	pthread_exit(0);
-
-}
 
 int main(int argc, char **argv) {
 
@@ -205,7 +188,7 @@ void endProgram(int pid) {
 	}
 
 
-	//Saves the time on which the process was forced to stop executio (considering the instant previous to send the finish program notification).
+	//Saves the time on which the process was forced to stop execution (considering the instant previous to send the finish program notification).
 	threadToKill->endTime = time(NULL);
 
 	int indexOfRemovedThread = getIndexFromTid(threadToKill->threadID);
@@ -251,7 +234,7 @@ void requestFilePath(char *filePath) {
 	printf("\nPlease provide file path\n");
 	getchar();
 	gets(filePath);
-	//puts(filePath);
+
 
 }
 
@@ -265,11 +248,11 @@ void *executeProgram(void *arg) {
 	return NULL;
 
 }
-int parser_getAnSISOPFromFile(char *name, void **buffer);
+
 void connectToKernel(char * program) {
 
 	//Declare variables used in function
-	int sockfd, n;
+	int sockfd;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	int programLength;
@@ -315,59 +298,34 @@ void connectToKernel(char * program) {
 	ipc_client_sendHandshake(CONSOLE, sockfd);
 	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(
 			sockfd);
-	log_debug(logger, "Handshake response received: Success: %d",
+	log_debug(logger, "Se recibió respuesta de handshake. Success: %d",
 			response->success);
 
 	free(response);
 	void *buffer = 0;
-
 	//Guarda el largo del programa y lo mete en buffer
 	programLength = parser_getAnSISOPFromFile(program, &buffer);
 
 	log_debug(logger, "Read file. %s. Size: %d", program, programLength);
 	dump_buffer(buffer, programLength);
-
 	//Envia el codigo del programa al Kernel
 	ipc_client_sendStartProgram(sockfd, programLength, buffer);
-
-
 	//Se le asigna pid
 	ipc_struct_program_start_response *startResponse =
 			ipc_client_receiveStartProgramResponse(sockfd);
-
-	//If no PID can be assigned
-	if(startResponse == NULL){
-
-		log_error(logger, "Start response failed - Can not assign PID. Program %s can not execute",program);
-
-		close(sockfd);
-
-		free(startResponse);
-		free(buffer);
-		free(aux);
-
-		pthread_exit(0);
-
-
-	}
-
 	aux->kernelSocket = sockfd;
 	aux->processId = startResponse->pid;
-	aux->consoleImpressions = 0;
-
 	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
 
 	free(startResponse);
 
-	free(buffer);
-
 	list_add(processList, aux);
-	int iterations = 0;
-	int newThreadIndex = getIndexFromTid(aux->threadID);
+	//int iterations = 0;
+
 
 	//TODO: Receive actual information from kernel and print it in console
 	while (1) {
-		/*
+
 		ipc_header header;
 
 		recv(sockfd, &header, sizeof(ipc_header), 0);
@@ -397,8 +355,8 @@ void connectToKernel(char * program) {
 			endProgram(aux->processId);
 
 
-		}*/
-
+		}
+		/* test without kernel messages
 		printf("Hi! I'm thread %u\n", aux->threadID);
 
 		   sleep(5);
@@ -409,22 +367,18 @@ void connectToKernel(char * program) {
 		    break;
 		    }
 
-		   iterations++;
+		   iterations++;*/
 
 	}
 
 	//Saves process end time in case it finishes it execution normally
 	aux->endTime = time(NULL);
 
-	//Closes connection to kernel
-	close(aux->kernelSocket);
-
 	//Shows time info
 	showFinishedThreadInfo(aux);
 
 	//Frees reserved memory
 	free(aux);
-
 	return;
 }
 
@@ -505,7 +459,6 @@ int noThreadsInExecution() {
 
 void showFinishedThreadInfo(t_process * aProcess){
 
-	/*
 	printf("\n\n***************************************************************************************\n");
 	printf("Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
 	printf("Program started execution at: %s",ctime(&aProcess->startTime));
@@ -513,13 +466,14 @@ void showFinishedThreadInfo(t_process * aProcess){
 	printf("The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
 	printf("This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 	printf("***************************************************************************************\n");
-	 */
-	log_info(logger, "Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
-	log_info(logger, "Program started execution at: %s",ctime(&aProcess->startTime));
-	log_info(logger, "Program finished execution at: %s",ctime(&aProcess->endTime));
-	log_info(logger, "The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
-	log_info(logger, "This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 
 	return;
+
+}
+
+// Handler para matar hilos
+void programThread_sig_handler(int signo) {
+
+	pthread_exit(0);
 
 }
