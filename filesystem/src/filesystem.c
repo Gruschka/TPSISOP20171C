@@ -198,15 +198,21 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 	}
 	log_debug(logger,"looking for bitmap file");
 	if(bitmapFileDescriptor = fopen(FS->bitmapFileName,"rb+")){
-		log_debug(logger,"found bitmap file");
-		struct stat st;
-		fstat(bitmapFileDescriptor,&st);
-		int size = st.st_size;
 
-		char *bitarray = malloc(FS->metadata.blockAmount);
-		FS->bitmap->bitarray = mmap(0,FS->metadata.blockAmount,PROT_WRITE,MAP_PRIVATE,bitmapFileDescriptor,0);
+		fclose(bitmapFileDescriptor);
 
-		FS->bitmap = bitarray_create(bitarray,FS->metadata.blockAmount);
+
+		FS->bitmapFileDescriptor = open(FS->bitmapFileName,O_RDWR);
+
+		struct stat fileStats;
+		fstat(FS->bitmapFileDescriptor, &fileStats);
+
+		char* mapPointer = mmap(0,fileStats.st_size, PROT_WRITE, MAP_SHARED, FS->bitmapFileDescriptor, 0);
+
+		FS->bitmap = bitarray_create_with_mode(mapPointer, FS->metadata.blockAmount/8, LSB_FIRST);
+
+		log_debug(logger,"opened bitmap from disk");
+
 
 	}else{
 		log_debug(logger,"bitmap file not found creating with parameters");
@@ -229,14 +235,14 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 		string_append(&bloques , "prueba");
 
 		int mmapFileDescriptor = open(FS->bitmapFileName, O_RDWR);
+		FS->bitmapFileDescriptor = mmapFileDescriptor;
 		struct stat scriptMap;
 		fstat(mmapFileDescriptor, &scriptMap);
 		int aux =string_length(bloques);
+
 		char* mapPointer = mmap(0,scriptMap.st_size, PROT_WRITE, MAP_SHARED, mmapFileDescriptor, 0);
 
-		memcpy(mapPointer,bloques,aux);
-	    munmap(mapPointer,aux);
-		close(mmapFileDescriptor);
+		FS->bitmap = bitarray_create_with_mode(mapPointer, FS->metadata.blockAmount/8, LSB_FIRST);
 
 
 		log_debug(logger,"bitmap created with parameters");

@@ -31,6 +31,7 @@ typedef struct FS{
 	char *dataDirectoryPath;
 	t_bitarray *bitmap;
 	t_FSMetadata metadata;
+	int bitmapFileDescriptor;
 }t_FS;
 /*
 Validar Archivo
