@@ -10,13 +10,15 @@
 #include <commons/log.h>
 
 #include "memory.h"
+#include <ipc/ipc.h>
 
 extern uint32_t pageSize;
 extern t_log *logger;
+//extern int memory_sockfd;
 
-void *memory_createPage(uint32_t size) {
-	void *page = malloc(size);
-	kernel_heapMetadata metadata = {size - sizeof(kernel_heapMetadata), true};
+void *memory_createPage(int pid) {
+	void *page = malloc(pageSize);
+	kernel_heapMetadata metadata = {pageSize - sizeof(kernel_heapMetadata), true};
 	memcpy(page, &metadata, sizeof(kernel_heapMetadata));
 	return page;
 	//TODO: Escribir esto en la memoria, devolver el puntero "virtual" y previamente hacer free()
