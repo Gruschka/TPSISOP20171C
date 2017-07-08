@@ -48,7 +48,7 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
 	CPU->connections[T_MEMORY].host = "127.0.0.1";
-	CPU->connections[T_MEMORY].portNumber = 5001;
+	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
 	CPU->connections[T_MEMORY].status = DISCONNECTED;
@@ -59,21 +59,22 @@ uint32_t cpu_start(t_CPU *CPU){
 
 	return 0;
 }
-uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
+uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 	t_CPUConnection *kernelConnection;
+	t_CPUConnection *memoryConnection;
 	switch (connectionType) {
 		case T_D_MEMORY:
 			printf("\nDummy");
 			printf("\nConnecting to DummyMemory\n");
 			myMemory = malloc(512*4);
 			memset(myMemory,0,512*4);
-			CPU->connections[1].portNumber = 9999;
-			CPU->connections[1].status = CONNECTED;
+			aCPU->connections[1].portNumber = 9999;
+			aCPU->connections[1].status = CONNECTED;
 			printf("\nConnected to memory\n");
 			return 0;
 			break;
 		case T_KERNEL:
-			kernelConnection = &CPU->connections[0];
+			kernelConnection = &aCPU->connections[T_KERNEL];
 			printf("\nServer Ip: %s Port No: %d", kernelConnection->host, kernelConnection->portNumber);
 			printf("\nConnecting to Kernel\n");
 
@@ -94,14 +95,48 @@ uint32_t cpu_connect(t_CPU *CPU, t_connectionType connectionType){
 				  perror("ERROR connecting");
 				  exit(1);
 			   }
+
+			   // Send handshake and wait for response
+			   ipc_client_sendHandshake(CPU, myCPU.connections[T_KERNEL].socketFileDescriptor);
+			   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(myCPU.connections[T_KERNEL].socketFileDescriptor);
+			   free(response);
 			   kernelConnection->status = CONNECTED;
 			   printf("CONNECTED TO KERNEL");
 
 			break;
 		case T_D_KERNEL:
 			printf("\nConnecting to Dummy Kernel\n");
-			CPU->connections[KERNEL].status = CONNECTED;
+			aCPU->connections[KERNEL].status = CONNECTED;
 			printf("\nConnected to Dummy Kernel\n");
+			break;
+		case T_MEMORY:
+			memoryConnection = &aCPU->connections[T_MEMORY];
+			printf("\nServer Ip: %s Port No: %d", memoryConnection->host, memoryConnection->portNumber);
+			printf("\nConnecting to Memory\n");
+
+			memoryConnection->socketFileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
+			   if (memoryConnection->socketFileDescriptor < 0) {
+				  perror("ERROR opening socket");
+				  exit(1);
+			   }
+
+			   memoryConnection->server = gethostbyname(memoryConnection->host);
+			   bzero((char *) &(memoryConnection->serv_addr), sizeof(memoryConnection->serv_addr));
+			   memoryConnection->serv_addr.sin_family = AF_INET;
+			   bcopy((char *)memoryConnection->server->h_addr, (char *)&(memoryConnection->serv_addr.sin_addr.s_addr), memoryConnection->server->h_length);
+			   memoryConnection->serv_addr.sin_port = htons(memoryConnection->portNumber);
+
+			   // Now connect to the server
+			   if (connect(memoryConnection->socketFileDescriptor, (struct sockaddr*)&(memoryConnection->serv_addr), sizeof(memoryConnection->serv_addr)) < 0) {
+				  perror("ERROR connecting");
+				  exit(1);
+			   }
+
+			   ipc_client_sendHandshake(CPU, memoryConnection->socketFileDescriptor);
+			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
+			   free(response);
+			   memoryConnection->status = CONNECTED;
+			   printf("CONNECTED TO Memory");
 			break;
 		default:
 			break;
@@ -363,7 +398,7 @@ int main() {
 	cpu_start(&myCPU);
 
 	// connect to memory -- DUMMY
-	cpu_connect(&myCPU,T_D_MEMORY);
+	cpu_connect(&myCPU,T_MEMORY);
 
 	char *testProgram = strdup(program);
 	//printf("writing program: %s", testProgram);
@@ -374,11 +409,6 @@ int main() {
 	char *logfile = tmpnam(NULL);
 
 	logger = log_create(logfile,"CPU",1,LOG_LEVEL_DEBUG);
-
-   // Send handshake and wait for response
-   ipc_client_sendHandshake(CPU, myCPU.connections[T_KERNEL].socketFileDescriptor);
-   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(myCPU.connections[T_KERNEL].socketFileDescriptor);
-   free(response);
 
    //wait for PCB
    myCPU.status = WAITING;
