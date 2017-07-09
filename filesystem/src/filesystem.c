@@ -346,7 +346,6 @@ int fs_createFile(char *path){ //Crea archivo nuevo
 		sprintf(bloques,"BLOQUES=[%d]\n",firstFreeBlock);
 		fputs(bloques,newFileDescriptor);
 		fs_createBlockFile(firstFreeBlock);
-		bitarray_set_bit(myFS.bitmap,firstFreeBlock);
 		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
@@ -361,9 +360,11 @@ int fs_createBlockFile(int blockNumber){
 	sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
 
 	FILE *fileDescriptor = fopen(fileName,"w+");
+	bitarray_set_bit(myFS.bitmap,blockNumber);
+
 	free(fileName);
 	fclose(fileDescriptor);
-	return EXIT_SUCCESS;
+	return blockNumber;
 
 }
 int fs_deleteBlockFile(int blockNumber){
@@ -530,15 +531,20 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	int blockNumberToWrite = offset / myFS.metadata.blockSize; //Saves block number to write (casting float to int).
     int blockToWrite = fileMetadata.blocks[blockNumberToWrite];
+    int fileBlockCount = (fileMetadata.size / myFS.metadata.blockSize) + 1;
 
 	int positionInBlockToWrite = offset % myFS.metadata.blockSize;
-	int amountOfBlocksToWrite = size / myFS.metadata.blockSize;
+	int amountOfBlocksToWrite = 1 + ((size+offset) / myFS.metadata.blockSize);
 	int remainingSpaceInCurrentBlock = myFS.metadata.blockSize - positionInBlockToWrite;
 	int sizeRemainingToWrite = size;
 
 	int temporalBufferSize;
 	FILE * blockFilePointer;
+	t_FileMetadata newFileMetadata;
+	newFileMetadata.blocks = malloc(sizeof(int) * amountOfBlocksToWrite);
+	memcpy(newFileMetadata.blocks,fileMetadata.blocks,sizeof(int) * fileBlockCount);
 
+	int amountWritten = 0;
 	char *temporalBuffer = NULL;
 	while(sizeRemainingToWrite > 0){ //While theres stuff to write
 
@@ -546,36 +552,48 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 		fseek(blockFilePointer, positionInBlockToWrite, SEEK_SET);
 
-
 		// DRY DONT REPEAT YOURSELF
-		if(size > remainingSpaceInCurrentBlock){
+		if(sizeRemainingToWrite > remainingSpaceInCurrentBlock){
 			temporalBufferSize = remainingSpaceInCurrentBlock;
 		}else{
-			temporalBufferSize = size;
+			temporalBufferSize = sizeRemainingToWrite;
 		}
 
 		temporalBuffer = malloc(temporalBufferSize+1);
 		memset(temporalBuffer,0,temporalBufferSize+1);
-		memcpy(temporalBuffer,buffer, temporalBufferSize);
+		memcpy(temporalBuffer,buffer+amountWritten, temporalBufferSize);
+		amountWritten += strlen(temporalBuffer);
 
 		fputs(temporalBuffer,blockFilePointer);
 		sizeRemainingToWrite -= strlen(temporalBuffer);
 
+		free(temporalBuffer);
 		fclose(blockFilePointer);
+
+
+		if(fileBlockCount < amountOfBlocksToWrite){
+			//need to create a new block
+			newFileMetadata.blocks[fileBlockCount] = fs_createBlockFile(fs_getFirstFreeBlock(&myFS));
+			blockToWrite = newFileMetadata.blocks[fileBlockCount];
+			remainingSpaceInCurrentBlock = myFS.metadata.blockSize;
+			positionInBlockToWrite = 0;
+			fileBlockCount++;
+		}else{
+			blockToWrite = newFileMetadata.blocks[fileBlockCount-1];
+			remainingSpaceInCurrentBlock = myFS.metadata.blockSize;
+			positionInBlockToWrite = 0;
+		}
+
 
 	}
 
-	int blockCount = ((fileMetadata.size+(myFS.metadata.blockSize -1)) / myFS.metadata.blockSize)+1;;
-	FILE *lastBlockFilePointer = fs_openBlockFile(fileMetadata.blocks[blockCount-1]);
+	FILE *lastBlockFilePointer = fs_openBlockFile(newFileMetadata.blocks[fileBlockCount-1]);
 	struct stat lastBlockFileStats;
 	fstat(lastBlockFilePointer->_fileno,&lastBlockFileStats);
 
-	int updatedFileSize = lastBlockFileStats.st_size + ((blockCount-1) * myFS.metadata.blockSize);
-
-	t_FileMetadata newFileMetadata;
+	int updatedFileSize = lastBlockFileStats.st_size + ((fileBlockCount-1) * myFS.metadata.blockSize);
 
 	newFileMetadata.size = updatedFileSize;
-	newFileMetadata.blocks = fileMetadata.blocks;
 
 	fs_updateFileMetadata(metadataFilePointer,newFileMetadata);
 
@@ -631,10 +649,9 @@ int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata){
 
 	sprintf(bufferOffset,"]");
 
-
-	sprintf(temporalBuffer,"BLOQUES=%s",lineBuffer);
+	sprintf(temporalBuffer,"BLOQUES=%s\n",lineBuffer);
 	fputs(temporalBuffer,filePointer);
-
+	fclose(filePointer);
 
 	return 0;
 }
@@ -670,10 +687,18 @@ int main(int argc, char **argv) {
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
 	//fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 
-	char *bafer = string_new();
-	string_append(&bafer,"hola");
 
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",30,strlen(bafer),bafer);
+	char *bafer = string_new();
+	//string_append(&bafer,"9823742938742938472983472983472984792384723984723984723984723948273498237492837429384729384723984723");
+	string_append(&bafer, "hola");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",63,strlen(bafer),bafer);
+	free(bafer);
+	fs_dump();
+
+	bafer = string_new();
+	string_append(&bafer, "holaquetalcomoestas");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",63,strlen(bafer),bafer);
+
 	fs_dump();
 
 	return EXIT_SUCCESS;
