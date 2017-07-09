@@ -282,7 +282,6 @@ t_FSMetadata fs_getFSMetadataFromFile(FILE *fileDescriptor){ //Recupera valores 
 	return output;
 
 }
-
 t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 
 		char lineBuffer[255];
@@ -519,6 +518,128 @@ void fs_dump(){
 
 
 }
+int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer){
+
+	if(fs_validateFile(filePath)){ //If the path is invalid
+			log_error(logger, "Invalid path - Can not write file");
+			return EXIT_FAILURE;
+	}
+
+	FILE *metadataFilePointer = fopen(filePath, "r+");
+	t_FileMetadata fileMetadata = fs_getMetadataFromFile(metadataFilePointer);
+
+	int blockNumberToWrite = offset / myFS.metadata.blockSize; //Saves block number to write (casting float to int).
+    int blockToWrite = fileMetadata.blocks[blockNumberToWrite];
+
+	int positionInBlockToWrite = offset % myFS.metadata.blockSize;
+	int amountOfBlocksToWrite = size / myFS.metadata.blockSize;
+	int remainingSpaceInCurrentBlock = myFS.metadata.blockSize - positionInBlockToWrite;
+	int sizeRemainingToWrite = size;
+
+	int temporalBufferSize;
+	FILE * blockFilePointer;
+
+	char *temporalBuffer = NULL;
+	while(sizeRemainingToWrite > 0){ //While theres stuff to write
+
+		blockFilePointer = fs_openBlockFile(blockToWrite);
+
+		fseek(blockFilePointer, positionInBlockToWrite, SEEK_SET);
+
+
+		// DRY DONT REPEAT YOURSELF
+		if(size > remainingSpaceInCurrentBlock){
+			temporalBufferSize = remainingSpaceInCurrentBlock;
+		}else{
+			temporalBufferSize = size;
+		}
+
+		temporalBuffer = malloc(temporalBufferSize+1);
+		memset(temporalBuffer,0,temporalBufferSize+1);
+		memcpy(temporalBuffer,buffer, temporalBufferSize);
+
+		fputs(temporalBuffer,blockFilePointer);
+		sizeRemainingToWrite -= strlen(temporalBuffer);
+
+		fclose(blockFilePointer);
+
+	}
+
+	int blockCount = ((fileMetadata.size+(myFS.metadata.blockSize -1)) / myFS.metadata.blockSize)+1;;
+	FILE *lastBlockFilePointer = fs_openBlockFile(fileMetadata.blocks[blockCount-1]);
+	struct stat lastBlockFileStats;
+	fstat(lastBlockFilePointer->_fileno,&lastBlockFileStats);
+
+	int updatedFileSize = lastBlockFileStats.st_size + ((blockCount-1) * myFS.metadata.blockSize);
+
+	t_FileMetadata newFileMetadata;
+
+	newFileMetadata.size = updatedFileSize;
+	newFileMetadata.blocks = fileMetadata.blocks;
+
+	fs_updateFileMetadata(metadataFilePointer,newFileMetadata);
+
+}
+FILE* fs_openBlockFile(int blockNumber){
+
+		char *fileName;
+		int fileNameLength = 0;
+
+		fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) +strlen(".bin") + 1;
+		fileName= malloc(fileNameLength);
+
+		sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
+
+		FILE *filePointer = fopen(fileName,"r+");
+		if(filePointer != NULL) free(fileName);
+		return filePointer;
+}
+int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata){
+
+	char lineBuffer[255];
+	char *metadataSizeBuffer;
+	char *metadataBlocksBuffer;
+	int * blocks;
+	t_FileMetadata output;
+
+	fseek(filePointer,0,SEEK_SET);
+
+	//Updates Size information on metadata
+	memset(lineBuffer,0,255);
+	sprintf(lineBuffer,"TAMANIO=%d\n",newMetadata.size);
+	fputs(lineBuffer,filePointer);
+
+	memset(lineBuffer,0,255);
+	int blockCount = (newMetadata.size / myFS.metadata.blockSize) + 1;
+	int iterator = 0;
+	char *bufferOffset = lineBuffer;
+	sprintf(lineBuffer,"[");
+	bufferOffset++;
+
+	while(iterator < blockCount){
+		sprintf(bufferOffset,"%d",newMetadata.blocks[iterator]);
+		bufferOffset += sizeof(char);
+		iterator++;
+		if(iterator<blockCount){
+			sprintf(bufferOffset,",",newMetadata.blocks[iterator]);
+			bufferOffset++;
+		}
+	}
+
+	char temporalBuffer[255];
+	memset(temporalBuffer,0,255);
+
+	sprintf(bufferOffset,"]");
+
+
+	sprintf(temporalBuffer,"BLOQUES=%s",lineBuffer);
+	fputs(temporalBuffer,filePointer);
+
+
+	return 0;
+}
+
+
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -547,8 +668,12 @@ int main(int argc, char **argv) {
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
-	fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	//fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 
+	char *bafer = string_new();
+	string_append(&bafer,"hola");
+
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",30,strlen(bafer),bafer);
 	fs_dump();
 
 	return EXIT_SUCCESS;
