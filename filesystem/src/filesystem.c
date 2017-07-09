@@ -296,17 +296,44 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 		strtok_r(lineBuffer,"=",&metadataSizeBuffer); // lineBuffer = TAMANIO\0128 => lineBuffer = TAMANIO y metadataSizeBuffer = 128\n
 		output.size = atoi(metadataSizeBuffer);
 
-		memset(lineBuffer,0,255);
 
+		char *compiledRead;
 		//strtok con igual => BLOQUES\0[4,1231,5,1,0,12,543]
-		fgets(lineBuffer,255,filePointer);
-		strtok_r(lineBuffer,"=",&metadataBlocksBuffer);
+		int blockCount = 1 + (output.size / myFS.metadata.blockSize);
+		char *stringArray = malloc(255);
+		memset(stringArray,0,255);
+		int stringArrayOffset = 0;
+		int blockNumber;
+		int iterator = 0;
 
-		char *stringArray = malloc(strlen(metadataBlocksBuffer));
-		memset(stringArray,0,strlen(metadataBlocksBuffer)+1);
-		memcpy(stringArray,metadataBlocksBuffer,strlen(metadataBlocksBuffer)-1);
+		fgets(lineBuffer,strlen("BLOQUES=[")+1,filePointer);
+		memset(lineBuffer,0,255);
+		char *temporalBuffer;
 
-		output.blocks = fs_getArrayFromString(&stringArray,(output.size +(myFS.metadata.blockSize -1))/myFS.metadata.blockSize);
+		int firstLine = 1;
+
+		while(fgets(lineBuffer,255,filePointer)){
+			if(!firstLine){
+				temporalBuffer = malloc(stringArrayOffset);
+				memset(temporalBuffer,0,stringArrayOffset);
+				memcpy(temporalBuffer,stringArray,stringArrayOffset);
+				free(stringArray);
+			}
+
+			stringArray = malloc(strlen(lineBuffer) + stringArrayOffset);
+			memset(stringArray,0,strlen(lineBuffer) + stringArrayOffset);
+			if(!firstLine) memcpy(stringArray,temporalBuffer,stringArrayOffset);
+			memcpy(stringArray+stringArrayOffset,lineBuffer,strlen(lineBuffer));
+			free(temporalBuffer);
+			stringArrayOffset+=strlen(lineBuffer);
+			firstLine = 0;
+			memset(lineBuffer,0,255);
+		}
+
+
+		strtok_r(stringArray,"]",&metadataBlocksBuffer);
+
+		output.blocks =fs_getArrayFromString(&stringArray,blockCount);
 
 		if(output.blocks == -1){
 
@@ -421,12 +448,7 @@ int *fs_getArrayFromString(char **stringArray, int numberOfBlocks){
 	int blockBuffer;
 	int *array = malloc(sizeof(int)*numberOfBlocks);
 
-
-
-	//Removes brackets from stringArray and saves blocks on stringPointer
-	char*stringPointer = string_substring_from(*stringArray ,1); //string_substring returns a pointer to a different direction
-	stringPointer  = string_substring_until(stringPointer ,strlen(stringPointer)-1);
-
+	char *stringPointer = *stringArray;
 
 	//Takes first block from stringPointer
 	token = strtok(stringPointer,",");
@@ -473,12 +495,6 @@ int fs_removeFile(char* filePath){
 	int numberOfBlocks = (fileMetadata.size + (myFS.metadata.blockSize -1)) / myFS.metadata.blockSize;
 	while(iterator < numberOfBlocks){
 		fs_deleteBlockFile(fileMetadata.blocks[iterator]);
-		iterator++;
-	}
-
-	//Liberar bitmap
-	iterator = 0;
-	while(iterator < numberOfBlocks){
 		bitarray_clean_bit(myFS.bitmap, fileMetadata.blocks[iterator]);
 		iterator++;
 	}
@@ -511,6 +527,7 @@ void fs_dump(){
 		printf("%d",unBit);
 		i++;
 	}
+	printf("\n");
 
 	fflush(stdout);
 
@@ -523,8 +540,9 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	if(fs_validateFile(filePath)){ //If the path is invalid
 			log_error(logger, "Invalid path - Can not write file");
-			return EXIT_FAILURE;
+			return -1;
 	}
+
 
 	FILE *metadataFilePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(metadataFilePointer);
@@ -539,6 +557,11 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 	if(carriedFloatingPoint > myFS.metadata.blockSize) amountOfBlocksToWrite++;
 
 	int fileBlockCount = (fileMetadata.size / myFS.metadata.blockSize) + 1;
+
+	int newBlocksNeeded = amountOfBlocksToWrite - fileBlockCount;
+
+	if(newBlocksNeeded > fs_getAmountOfFreeBlocks()) return -1;
+
     int blockToWrite;
     t_FileMetadata newFileMetadata;
 	newFileMetadata.blocks = malloc(sizeof(int) * amountOfBlocksToWrite);
@@ -652,33 +675,51 @@ int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata){
 	memset(lineBuffer,0,255);
 	int blockCount = (newMetadata.size / myFS.metadata.blockSize) + 1;
 	int iterator = 0;
-	char *bufferOffset = lineBuffer;
-	sprintf(lineBuffer,"[");
-	bufferOffset++;
+	sprintf(lineBuffer,"BLOQUES=[");
+
+	fputs(lineBuffer, filePointer);
+	memset(lineBuffer,0,255);
 
 	while(iterator < blockCount){
-		sprintf(bufferOffset,"%d",newMetadata.blocks[iterator]);
-		bufferOffset += sizeof(char);
+		sprintf(lineBuffer,"%d",newMetadata.blocks[iterator]);
+		fputs(lineBuffer,filePointer);
+		memset(lineBuffer,0,255);
 		iterator++;
-		if(iterator<blockCount){
-			sprintf(bufferOffset,",",newMetadata.blocks[iterator]);
-			bufferOffset++;
+		if(iterator < blockCount){
+			sprintf(lineBuffer,",");
+			fputs(lineBuffer,filePointer);
+			memset(lineBuffer,0,255);
 		}
 	}
+	memset(lineBuffer,0,255);
+	sprintf(lineBuffer,"]\n");
 
-	char temporalBuffer[255];
-	memset(temporalBuffer,0,255);
-
-	sprintf(bufferOffset,"]");
-
-	sprintf(temporalBuffer,"BLOQUES=%s\n",lineBuffer);
-	fputs(temporalBuffer,filePointer);
+	fputs(lineBuffer,filePointer);
 	fclose(filePointer);
 
 	return 0;
 }
 
+int fs_getAmountOfFreeBlocks(){
 
+		int i = 0;
+		int unBit = 0;
+		int freeBlocks = 0;
+
+		while(i < myFS.metadata.blockAmount){
+
+			unBit = bitarray_test_bit(myFS.bitmap,i);
+
+			if(!unBit) freeBlocks++;
+
+			i++;
+		}
+
+		return freeBlocks;
+
+
+
+}
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -700,27 +741,27 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-
-	fs_dump();
-
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
-	//fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
+	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
+	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
 
 
-	char *bafer = string_new();
+	//char *bafer = string_new();
+
 	//string_append(&bafer, "h");
 	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",192,strlen(bafer),bafer);
 	//free(bafer);
 	//fs_dump();
 
-	//bafer = string_new();
-	//string_append(&bafer,"9823742938742938472983472983472984792384723984723984723984723948273498237492837429384729384723984723");
-	string_append(&bafer,"9823742938742938472983472983472984792384723984");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",45,strlen(bafer),bafer);
+	char *bafer = string_new();
+	string_append(&bafer,"h");
 
+
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",180000,strlen(bafer),bafer);
+	fs_dump();
+
+	fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_dump();
 
 	return EXIT_SUCCESS;

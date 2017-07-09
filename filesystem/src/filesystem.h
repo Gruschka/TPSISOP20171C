@@ -73,6 +73,7 @@ int *fs_getArrayFromString(char **string,int numberOfBlocks);
 int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer);
 FILE* fs_openBlockFile(int blockNumber);
 int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata); // after modifying a file updates its metadata
+int fs_getAmountOfFreeBlocks();
 extern t_FS myFS;
 
 #endif /* FILESYSTEM_H_ */
