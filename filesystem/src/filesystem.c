@@ -529,22 +529,44 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 	FILE *metadataFilePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(metadataFilePointer);
 
-	int blockNumberToWrite = offset / myFS.metadata.blockSize; //Saves block number to write (casting float to int).
-    int blockToWrite = fileMetadata.blocks[blockNumberToWrite];
-    int fileBlockCount = (fileMetadata.size / myFS.metadata.blockSize) + 1;
+	int sparseBlocks = offset / myFS.metadata.blockSize;
+	int amountOfBlocksOfContent = size / myFS.metadata.blockSize;
 
+	int carriedFloatingPoint = (offset % myFS.metadata.blockSize)+(size % myFS.metadata.blockSize);
+
+	int amountOfBlocksToWrite = 1 + sparseBlocks + amountOfBlocksOfContent;
+
+	if(carriedFloatingPoint > myFS.metadata.blockSize) amountOfBlocksToWrite++;
+
+	int fileBlockCount = (fileMetadata.size / myFS.metadata.blockSize) + 1;
+    int blockToWrite;
+    t_FileMetadata newFileMetadata;
+	newFileMetadata.blocks = malloc(sizeof(int) * amountOfBlocksToWrite);
+	memcpy(newFileMetadata.blocks,fileMetadata.blocks,sizeof(int) * fileBlockCount);
+
+	int iterator=0;
+    // check for the first block, if im being asked to write further than the blocks I have
+    if(sparseBlocks > fileBlockCount-1){
+    	while(iterator < sparseBlocks){
+			newFileMetadata.blocks[fileBlockCount] = fs_createBlockFile(fs_getFirstFreeBlock(&myFS));
+			blockToWrite = newFileMetadata.blocks[fileBlockCount];
+			fileBlockCount++;
+    		iterator++;
+    	}
+    }else{
+    	blockToWrite = fileMetadata.blocks[sparseBlocks];
+    }
 	int positionInBlockToWrite = offset % myFS.metadata.blockSize;
-	int amountOfBlocksToWrite = 1 + ((size+offset) / myFS.metadata.blockSize);
+
 	int remainingSpaceInCurrentBlock = myFS.metadata.blockSize - positionInBlockToWrite;
 	int sizeRemainingToWrite = size;
 
 	int temporalBufferSize;
 	FILE * blockFilePointer;
-	t_FileMetadata newFileMetadata;
-	newFileMetadata.blocks = malloc(sizeof(int) * amountOfBlocksToWrite);
-	memcpy(newFileMetadata.blocks,fileMetadata.blocks,sizeof(int) * fileBlockCount);
+
 
 	int amountWritten = 0;
+	int blocksWritten = 0;
 	char *temporalBuffer = NULL;
 	while(sizeRemainingToWrite > 0){ //While theres stuff to write
 
@@ -571,7 +593,7 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 		fclose(blockFilePointer);
 
 
-		if(fileBlockCount < amountOfBlocksToWrite){
+		if(fileBlockCount < amountOfBlocksToWrite && (blockToWrite == newFileMetadata.blocks[fileBlockCount-1])){
 			//need to create a new block
 			newFileMetadata.blocks[fileBlockCount] = fs_createBlockFile(fs_getFirstFreeBlock(&myFS));
 			blockToWrite = newFileMetadata.blocks[fileBlockCount];
@@ -579,12 +601,12 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 			positionInBlockToWrite = 0;
 			fileBlockCount++;
 		}else{
-			blockToWrite = newFileMetadata.blocks[fileBlockCount-1];
+			blockToWrite = newFileMetadata.blocks[blocksWritten];
 			remainingSpaceInCurrentBlock = myFS.metadata.blockSize;
 			positionInBlockToWrite = 0;
 		}
 
-
+		blocksWritten++;
 	}
 
 	FILE *lastBlockFilePointer = fs_openBlockFile(newFileMetadata.blocks[fileBlockCount-1]);
@@ -689,15 +711,15 @@ int main(int argc, char **argv) {
 
 
 	char *bafer = string_new();
-	//string_append(&bafer,"9823742938742938472983472983472984792384723984723984723984723948273498237492837429384729384723984723");
-	string_append(&bafer, "hola");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",63,strlen(bafer),bafer);
-	free(bafer);
-	fs_dump();
+	//string_append(&bafer, "h");
+	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",192,strlen(bafer),bafer);
+	//free(bafer);
+	//fs_dump();
 
-	bafer = string_new();
-	string_append(&bafer, "holaquetalcomoestas");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",63,strlen(bafer),bafer);
+	//bafer = string_new();
+	//string_append(&bafer,"9823742938742938472983472983472984792384723984723984723984723948273498237492837429384729384723984723");
+	string_append(&bafer,"9823742938742938472983472983472984792384723984");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",45,strlen(bafer),bafer);
 
 	fs_dump();
 
