@@ -306,9 +306,32 @@ void cpu_return(int returnValue){
 
 	printf("return\n");
 }
+
+ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *identifier) {
+	ipc_struct_kernel_semaphore_wait *wait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
+
+	wait->header.operationIdentifier = KERNEL_SEMAPHORE_WAIT;
+	wait->identifierLength = strlen(identifier + 1);
+
+	wait->identifier = malloc(strlen(identifier) + 1);
+	memcpy(wait->identifier, identifier, strlen(identifier) + 1);
+
+	uint32_t pcbSize = pcb_getPCBSize(myCPU.assignedPCB);
+	wait->serializedLength = pcbSize;
+	memcpy(wait->pcb, pcb_serializePCB(myCPU.assignedPCB), pcbSize);
+
+	send(fd, wait, sizeof(ipc_header) + sizeof(int) + strlen(identifier) + 1, 0);
+
+	ipc_struct_kernel_semaphore_wait_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_semaphore_wait_response), 0);
+
+	return response;
+}
+
 void cpu_kernelWait(char *semaphoreId){
 	printf("kernelWait\n");
 	fflush(stdout);
+	ipc_struct_kernel_semaphore_wait_response response = ipc_sendSemaphoreWait(myCPU.connections[T_KERNEL].socketFileDescriptor, semaphoreId);
 }
 void cpu_kernelSignal(char *semaphoreId){
 	printf("kernelSignal\n");
@@ -423,7 +446,6 @@ int main() {
    //wait for PCB
 	while (1) {
 		myCPU.status = WAITING;
-
 		ipc_header header;
 		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &header, sizeof(ipc_header), 0);
 

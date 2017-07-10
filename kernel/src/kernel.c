@@ -420,6 +420,10 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "New program finish. fd: %d", fd);
 		break;
 	}
+	case KERNEL_SEMAPHORE_WAIT: {
+		ipc_struct_kernel_semaphore_wait *wait = buffer;
+		log_info(logger, "kernel_semaphore_wait. identifier: %s", wait->identifier);
+	}
 	default:
 		break;
 	}
