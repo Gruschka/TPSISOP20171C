@@ -175,7 +175,7 @@ int connectToMemory() {
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	bcopy((char *) server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-	serv_addr.sin_port = htons(8888);
+	serv_addr.sin_port = htons(5003);
 
 
 	if (connect(memory_sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
@@ -201,6 +201,48 @@ int memory_sendInitProgram(int pid, int numberOfPages) {
 	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
 
 	if (responseHeader.operationIdentifier == MEMORY_INIT_PROGRAM_RESPONSE) {
+		char success;
+
+		recv(memory_sockfd, &success, sizeof(char), 0);
+		return (success != 0) ? 1 : -1;
+	}
+
+	return -1;
+}
+
+int memory_sendRequestMorePages(int pid, int numberOfPages) {
+	ipc_struct_memory_request_more_pages request;
+	request.header.operationIdentifier = MEMORY_REQUEST_MORE_PAGES;
+
+	request.numberOfPages = numberOfPages;
+	request.pid = pid;
+
+	send(memory_sockfd, &request, sizeof(request), 0);
+
+	ipc_header responseHeader;
+	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+
+	if (responseHeader.operationIdentifier == MEMORY_REQUEST_MORE_PAGES_RESPONSE) {
+		char success;
+
+		recv(memory_sockfd, &success, sizeof(char), 0);
+		return (success != 0) ? 1 : -1;
+	}
+
+	return -1;
+}
+
+int memory_sendDeinitProgram(int pid) {
+	ipc_struct_memory_deinit_program request;
+	request.header.operationIdentifier = MEMORY_DEINIT_PROGRAM;
+	request.pid = pid;
+
+	send(memory_sockfd, &request, sizeof(request), 0);
+
+	ipc_header responseHeader;
+	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+
+	if (responseHeader.operationIdentifier == MEMORY_DEINIT_PROGRAM_RESPONSE) {
 		char success;
 
 		recv(memory_sockfd, &success, sizeof(char), 0);

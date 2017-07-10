@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <commons/bitarray.h>
+#include <stdint.h>
 
 
 #define METADATA_DIR "/Metadata/";
@@ -21,6 +22,11 @@ typedef struct metadata{
 	int blockSize;
 	char *magicNumber;
 }t_FSMetadata;
+
+typedef struct fileMetadata{
+	int size;
+	int * blocks;
+}t_FileMetadata;
 
 typedef struct FS{
 	char *mountDirectoryPath;
@@ -55,14 +61,19 @@ int fs_loadConfig(t_FS *FS);
 int fs_mount(t_FS *FS);
 int fs_openOrCreateMetadata(t_FS *FS);
 int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char *magicNumber);
-t_FSMetadata fs_getMetadataFromFile(FILE *fileDescriptor);
+t_FSMetadata fs_getFSMetadataFromFile(FILE *fileDescriptor);
+t_FileMetadata fs_getMetadataFromFile(FILE *filePointer);
 int fs_validateFile(char *path);
 int fs_createFile(char *path);
 int fs_createBlockFile(int blockNumber);
 int fs_getFirstFreeBlock(t_FS *FS);
 int fs_getNumberOfDigits(int number);
 int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C);
-
+int *fs_getArrayFromString(char **string,int numberOfBlocks);
+int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer);
+FILE* fs_openBlockFile(int blockNumber);
+int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata); // after modifying a file updates its metadata
+int fs_getAmountOfFreeBlocks();
 extern t_FS myFS;
 
 #endif /* FILESYSTEM_H_ */
