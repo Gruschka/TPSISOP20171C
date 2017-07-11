@@ -34,6 +34,8 @@ typedef enum {
 	MEMORY_WRITE_RESPONSE,
 	MEMORY_REQUEST_MORE_PAGES,
 	MEMORY_REQUEST_MORE_PAGES_RESPONSE,
+	MEMORY_REMOVE_PAGE_FROM_PROGRAM,
+	MEMORY_REMOVE_PAGE_FROM_PROGRAM_RESPONSE,
 	MEMORY_DEINIT_PROGRAM,
 	MEMORY_DEINIT_PROGRAM_RESPONSE,
 	CPU_EXECUTE_PROGRAM,
@@ -146,18 +148,27 @@ typedef struct memory_request_more_pages {
 	int numberOfPages;
 } __attribute__((packed)) ipc_struct_memory_request_more_pages;
 
-//FIXME cambiar esto para q me mande el pid y evitar que sea bloqueante el pedido de páginas
 typedef struct memory_request_more_pages_response {
 	ipc_header header;
 	char success;
 } __attribute__((packed)) ipc_struct_memory_request_more_pages_response;
+
+typedef struct memory_remove_page_from_program {
+	ipc_header header;
+	int pid;
+	int pageNumber;
+} __attribute__((packed)) ipc_struct_memory_remove_page_from_program;
+
+typedef struct memory_remove_page_from_program_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_memory_remove_page_from_program_response;
 
 typedef struct memory_deinit_program {
 	ipc_header header;
 	int pid;
 } __attribute__((packed)) ipc_struct_memory_deinit_program;
 
-//FIXME cambiar esto para q me mande el pid y evitar que sea bloqueante la desinicializacion
 typedef struct memory_deinit_program_response {
 	ipc_header header;
 	char success;

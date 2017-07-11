@@ -232,6 +232,27 @@ int memory_sendRequestMorePages(int pid, int numberOfPages) {
 	return -1;
 }
 
+int memory_sendRemovePageFromProgram(int pid, int pageNumber) {
+	ipc_struct_memory_remove_page_from_program request;
+	request.header.operationIdentifier = MEMORY_REMOVE_PAGE_FROM_PROGRAM;
+	request.pid = pid;
+	request.pageNumber = pageNumber;
+
+	send(memory_sockfd, &request, sizeof(request), 0);
+
+	ipc_header responseHeader;
+	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+
+	if (responseHeader.operationIdentifier == MEMORY_REMOVE_PAGE_FROM_PROGRAM_RESPONSE) {
+		char success;
+
+		recv(memory_sockfd, &success, sizeof(char), 0);
+		return (success != 0) ? 1 : -1;
+	}
+
+	return -1;
+}
+
 int memory_sendDeinitProgram(int pid) {
 	ipc_struct_memory_deinit_program request;
 	request.header.operationIdentifier = MEMORY_DEINIT_PROGRAM;
