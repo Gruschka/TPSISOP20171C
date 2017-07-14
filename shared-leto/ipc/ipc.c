@@ -92,7 +92,7 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 
 
 				ipc_struct_kernel_semaphore_wait *semaphoreWait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
-				semaphoreWait->header = *header;
+				semaphoreWait->header = header;
 				semaphoreWait->identifierLength = identifierLength;
 				semaphoreWait->identifier = identifier;
 				semaphoreWait->serializedLength = serializedLength;
