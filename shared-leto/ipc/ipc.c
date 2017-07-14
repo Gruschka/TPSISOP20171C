@@ -70,7 +70,7 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				deserializedStructHandler(fd, header->operationIdentifier, request);
 				break;
 			case KERNEL_SEMAPHORE_WAIT: {
-				ipc_header *header;
+				ipc_header header;
 				recv(fd, &header, sizeof(ipc_header), 0);
 
 				int identifierLength;

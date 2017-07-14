@@ -385,7 +385,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		for (currentPage = 0; currentPage < numberOfPages; currentPage++) {
 			int size;
 
-			if (currentPage == numberOfPages - 1) { // la ultima pagina
+			if (currentPage == numberOfPages - 1) { // si es la última página mando lo que falta
 				size = total - (currentPage * pageSize);
 			} else {
 				size = pageSize;
@@ -393,7 +393,6 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 
 			ipc_client_sendMemoryWrite(memory_sockfd, pid, currentPage, 0, size, codeString + currentPage * pageSize);
 		}
-
 
 		ipc_sendStartProgramResponse(fd, newProgram->pid);
 		executeNewProgram(newProgram);
