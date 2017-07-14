@@ -312,20 +312,24 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 
 		int firstLine = 1;
 
+		//Mientras haya para leer del archivo de metadata lo vuelco en el lineBuffer
 		while(fgets(lineBuffer,255,filePointer)){
-			if(!firstLine){
+
+			if(!firstLine){ //Si  es la primera linea linea, no crea backup
 				temporalBuffer = malloc(stringArrayOffset);
 				memset(temporalBuffer,0,stringArrayOffset);
 				memcpy(temporalBuffer,stringArray,stringArrayOffset);
 				free(stringArray);
 			}
 
+			//String array guarda los bloques sin corchetes, y se va alocando segun lo que tenga linebuffer + leido acumulado
 			stringArray = malloc(strlen(lineBuffer) + stringArrayOffset);
 			memset(stringArray,0,strlen(lineBuffer) + stringArrayOffset);
 			if(!firstLine) memcpy(stringArray,temporalBuffer,stringArrayOffset);
+			//Si es la primera linea => strinArrayOffset = 0 (arranca del principio)
 			memcpy(stringArray+stringArrayOffset,lineBuffer,strlen(lineBuffer));
-			free(temporalBuffer);
-			stringArrayOffset+=strlen(lineBuffer);
+			if(!firstLine)free(temporalBuffer);
+			stringArrayOffset+=strlen(lineBuffer); //Acumulo lo que acabo de leer
 			firstLine = 0;
 			memset(lineBuffer,0,255);
 		}
@@ -348,7 +352,6 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 
 
 }
-//recibe [4,1231,5,1,0,12,543] devuelve int*
 int fs_validateFile(char *path){ //Se fija si un path existe
 	FILE *fileDescriptor;
 	if(fileDescriptor = fopen(path,"r+")){
@@ -383,8 +386,10 @@ int fs_createBlockFile(int blockNumber){
 
 	fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) +strlen(".bin") + 1;
 	fileName= malloc(fileNameLength);
+	memset(fileName,0,fileNameLength);
 
-	sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
+	fflush(stdin);
+	sprintf(fileName,"%s%d.bin",myFS.dataDirectoryPath,blockNumber);
 
 	FILE *fileDescriptor = fopen(fileName,"w+");
 	bitarray_set_bit(myFS.bitmap,blockNumber);
@@ -615,7 +620,7 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 		free(temporalBuffer);
 		fclose(blockFilePointer);
 
-
+		blocksWritten++;
 		if(fileBlockCount < amountOfBlocksToWrite && (blockToWrite == newFileMetadata.blocks[fileBlockCount-1])){
 			//need to create a new block
 			newFileMetadata.blocks[fileBlockCount] = fs_createBlockFile(fs_getFirstFreeBlock(&myFS));
@@ -629,7 +634,7 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 			positionInBlockToWrite = 0;
 		}
 
-		blocksWritten++;
+
 	}
 
 	FILE *lastBlockFilePointer = fs_openBlockFile(newFileMetadata.blocks[fileBlockCount-1]);
@@ -644,15 +649,7 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 }
 FILE* fs_openBlockFile(int blockNumber){
-
-		char *fileName;
-		int fileNameLength = 0;
-
-		fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) +strlen(".bin") + 1;
-		fileName= malloc(fileNameLength);
-
-		sprintf(fileName,"%s%d.bin\n",myFS.dataDirectoryPath,blockNumber);
-
+		char *fileName = fs_getBlockFilePath(blockNumber);
 		FILE *filePointer = fopen(fileName,"r+");
 		if(filePointer != NULL) free(fileName);
 		return filePointer;
@@ -699,7 +696,6 @@ int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata){
 
 	return 0;
 }
-
 int fs_getAmountOfFreeBlocks(){
 
 		int i = 0;
@@ -716,6 +712,113 @@ int fs_getAmountOfFreeBlocks(){
 		}
 
 		return freeBlocks;
+
+
+
+}
+char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
+
+	char *fileName = fs_getBlockFilePath(blockNumberToRead);
+
+	FILE * blockFilePointer = fs_openBlockFile(blockNumberToRead);
+	int sizeToRead = sizeof(char) * size;
+	int error = 0;
+	char * readValues = malloc(sizeToRead);
+
+	memset(readValues,0, sizeToRead);
+
+	if(fs_validateFile(fileName)){ //If the path is invalid
+			log_error(logger, "Invalid path - Can not write file");
+			return -1;
+	}
+
+	error = fseek(blockFilePointer, offset, SEEK_SET);
+
+	if(error == -1){
+		log_error(logger, "Error while seeking offset on READ FILE operation");
+		return -1;
+	}
+
+	fflush(stdin);
+	error = fgets(readValues, size, blockFilePointer);
+
+	if(error == -1){
+		log_error(logger, "Error while reading on READ FILE operation");
+		return -1;
+	}
+
+	printf("Reading %d bytes with %d offset from block %d : %s \n", size,offset,blockNumberToRead, readValues);
+
+	fclose(blockFilePointer);
+
+	return readValues;
+
+
+
+}
+char *fs_getBlockFilePath(int blockNumber){
+
+		int fileNameLength = 0;
+		char * filePath;
+
+		fileNameLength += strlen(myFS.dataDirectoryPath) + fs_getNumberOfDigits(blockNumber) +strlen(".bin") + 1;
+		filePath = malloc(fileNameLength);
+
+		sprintf(filePath,"%s%d.bin",myFS.dataDirectoryPath,blockNumber);
+		return filePath;
+
+}
+int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
+
+	if(fs_validateFile(filePath)){ //If the path is invalid
+			log_error(logger, "Invalid path - Can not write file");
+			return -1;
+	}
+
+	FILE *filePointer = fopen(filePath, "r+");
+	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
+
+	int amountOfBlocksInMetadata = fileMetadata.size / myFS.metadata.blockSize;
+	int currentBlockNumber = offset / myFS.metadata.blockSize; //todo: validar que el primer bloque es mio
+	int amountOfBlocksToRead = size / myFS.metadata.blockSize; //todo: validar que caigo en un bloque mio
+	int readOffset = offset % myFS.metadata.blockSize;
+	int bytesUntilEndOfBlock =  myFS.metadata.blockSize - readOffset;
+	int bytesRemainingToRead = size;
+	int currentBlock = fileMetadata.blocks[currentBlockNumber];
+	char *readValues = malloc(size);
+	memset(readValues,0,size);
+	char *buffer;
+	int offsetBuffer = 0;
+
+	while(bytesRemainingToRead <= size){ //Mientras todavia quede por leer
+
+		if(bytesRemainingToRead > bytesUntilEndOfBlock){ //Si tiene que leer mas de un bloque
+			buffer = fs_readBlockFile(currentBlock, readOffset, bytesUntilEndOfBlock); //Lee hasta fin de bloque
+			memcpy(readValues+offsetBuffer, buffer, bytesUntilEndOfBlock);
+			bytesRemainingToRead -= bytesUntilEndOfBlock; //Resta los bytes que leyo
+			// jump to next block
+			currentBlockNumber++;
+			currentBlock = fileMetadata.blocks[currentBlockNumber];
+			offsetBuffer += bytesUntilEndOfBlock;
+			bytesUntilEndOfBlock = myFS.metadata.blockSize;
+			readOffset = 0;
+
+		}else{ //Si tiene que terminar de leer los bytes restantes en el currentblock
+			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockNumber], readOffset, bytesRemainingToRead);
+			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead);
+			bytesRemainingToRead = 0;
+			offsetBuffer += bytesRemainingToRead;
+			break;
+
+		}
+		free(buffer);
+
+	}
+
+	printf("READ: %s\n",readValues);
+
+	return EXIT_SUCCESS;
+
 
 
 
@@ -742,6 +845,10 @@ int main(int argc, char **argv) {
 	fs_mount(&myFS);
 
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
+
+
 	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
 	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
 	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
@@ -755,14 +862,17 @@ int main(int argc, char **argv) {
 	//fs_dump();
 
 	char *bafer = string_new();
-	string_append(&bafer,"h");
+	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
 
 
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",180000,strlen(bafer),bafer);
+	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
+
+
 	fs_dump();
 
-	fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,129);
+	/*fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_dump();
-
+	 */
 	return EXIT_SUCCESS;
 }
