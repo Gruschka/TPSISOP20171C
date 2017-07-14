@@ -41,6 +41,7 @@ t_log *logger;
 t_list *sharedVariables;
 t_list *cpusList; //TODO: Sincronizar acceso a esta lista
 t_list *semaphores; //TODO: Sincronizar acceso a esta lista
+t_list *activeConsoles;
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -82,11 +83,12 @@ void initSharedVariables() {
 }
 
 void initSemaphores() {
+	kernel_semaphores_init(semaphoreDidBlockProcess,semaphoreDidWakeProcess);
 	int i;
 
 	for (i = 0; configuration->semaphoreIDs[i] != NULL; i++) {
 		char *identifier = configuration->semaphoreIDs[i];
-		int value = configuration->semaphoreValues[i];
+		int value = atoi(configuration->semaphoreValues[i]);
 
 		kernel_semaphore *sem = kernel_semaphore_make(identifier, value);
 		list_add(semaphores, sem);
@@ -159,6 +161,17 @@ void testSemaphores() {
 	//destroy semaphore
 	kernel_semaphore_destroy(testSemaphore);
 	// KERNEL SEMAPHORE TEST END
+}
+
+kernel_semaphore *getSemaphoreByIdentifier(char *identifier) {
+	int i;
+	for (i = 0; i < list_size(semaphores); i++) {
+		kernel_semaphore *sem = list_get(semaphores, i);
+
+		if (strcmp(sem->identifier, identifier) == 0) return sem;
+	}
+
+	return NULL;
 }
 
 int connectToMemory() {
@@ -274,6 +287,58 @@ int memory_sendDeinitProgram(int pid) {
 	return -1;
 }
 
+void showOptions() {
+	printf("\n\n");
+	printf("Ingresar una opción\n");
+	printf("1 - Listado de procesos\n");
+	printf("2 - Información de un proceso\n");
+	printf("3 - Tabla global de archivos\n");
+	printf("4 - Modificar grado de multiprogramación\n");
+	printf("5 - Finalizar un proceso\n");
+	printf("6 - Detener la planificación\n");
+	printf("0 - Salir\n");
+	printf("\n\n");
+}
+
+void showMenu() {
+	int optionIndex = 0;
+	do {
+		showOptions();
+		scanf("%d", &optionIndex);
+		switch (optionIndex) {
+		case 0: printf("Exit"); break;
+		case 1: {
+			printf("1 - New\n2 - Ready\n3 - Exec\n4 - Block\n5 - Exit\n6- Todos\n");
+			int option = 0;
+			scanf("%d", &option);
+			switch (option) {
+				case 1: dump_list("new", newQueue->elements); break;
+				case 2: dump_list("ready", readyQueue); break;
+				case 3: dump_list("exec", execList); break;
+				case 4: dump_list("block", blockQueue); break;
+				case 5: dump_list("exit", exitQueue->elements); break;
+				case 6: {
+					dump_list("new", newQueue->elements);
+					dump_list("ready", readyQueue);
+					dump_list("exec", execList);
+					dump_list("block", blockQueue);
+					dump_list("exit", exitQueue->elements);
+					break;
+				}
+				default: break;
+			}
+		}
+		break;
+		case 2: printf("TBD\n"); break;
+		case 3: printf("TBD\n"); break;
+		case 4: printf("TBD\n"); break;
+		case 5: printf("TBD\n"); break;
+		case 6: printf("TBD\n"); break;
+		default: printf("Opción inválida, vuelva a intentar.\n"); break;
+		}
+	} while (optionIndex != 0);
+}
+
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
 
@@ -300,16 +365,19 @@ int main(int argc, char **argv) {
 	readyQueue = readyQueue_create();
 	execList = execList_create();
 	blockQueue = blockQueue_create();
+	exitQueue = exitQueue_create();
+	activeConsoles = list_create();
 	sharedVariables = list_create();
 	cpusList = list_create();
 	semaphores = list_create();
 
 	initSharedVariables();
-//	testMemory();
-//	testSemaphores();
-	extern void testFS();
+	initSemaphores();
 
-	testFS();
+	extern void testFS();
+	//	testMemory();
+	//	testSemaphores();
+	//	testFS();
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -329,6 +397,8 @@ int main(int argc, char **argv) {
 			NULL );
 	pthread_create(&configurationWatcherThread, NULL,
 			(void*) configurationWatcherThread_mainFunction, NULL );
+
+	showMenu();
 
 	pthread_join(consolesServerThread, NULL );
 	pthread_join(schedulerThread, NULL );
@@ -369,6 +439,8 @@ void fetchConfiguration() {
 			"GRADO_MULTIPROG");
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
 	configuration->sharedVariableNames = config_get_array_value(__config, "SHARED_VARS");
+	configuration->semaphoreIDs = config_get_array_value(__config, "SEM_IDS");
+	configuration->semaphoreValues = config_get_array_value(__config, "SEM_INIT");
 }
 
 ///////////////////////////// Consoles server /////////////////////////////////
@@ -416,14 +488,25 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 			ipc_client_sendMemoryWrite(memory_sockfd, pid, currentPage, 0, size, codeString + currentPage * pageSize);
 		}
 
-
 		ipc_sendStartProgramResponse(fd, newProgram->pid);
+		t_active_console *console = malloc(sizeof(t_active_console));
+		console->fd = fd;
+		console->pid = newProgram->pid;
+		list_add(activeConsoles, console);
 		executeNewProgram(newProgram);
 
 		break;
 	}
 	case PROGRAM_FINISH: {
-		log_info(logger, "New program finish. fd: %d", fd);
+		ipc_struct_program_finish *programFinish = buffer;
+		log_info(logger, "PROGRAM_FINISH. fd: %d. pid: %d", fd, programFinish->pid);
+		pthread_mutex_lock(&readyQueue_mutex);
+		t_PCB *pcb = findPCB(readyQueue, programFinish->pid);
+		if (pcb != NULL) {
+			removePCB(readyQueue, pcb);
+		}
+		pthread_mutex_unlock(&readyQueue_mutex);
+		//TODO: enviarle a la memoria para liberar los recursos
 		break;
 	}
 	default:
@@ -484,6 +567,18 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "New program finish. fd: %d", fd);
 		break;
 	}
+	case KERNEL_SEMAPHORE_WAIT: {
+		ipc_struct_kernel_semaphore_wait *wait = buffer;
+		log_info(logger, "kernel_semaphore_wait. identifier: %s", wait->identifier);
+
+		kernel_semaphore *sem = getSemaphoreByIdentifier(wait->identifier);
+		ipc_struct_kernel_semaphore_wait_response response;
+		response.header.operationIdentifier = KERNEL_SEMAPHORE_WAIT_RESPONSE;
+
+		response.shouldBlock = kernel_semaphore_wait(sem, list_get(execList, 0)) == 0 ? 1 : 0;
+		send(fd, &response, sizeof(ipc_struct_kernel_semaphore_wait_response), 0);
+		break;
+	}
 	default:
 		break;
 	}
@@ -541,10 +636,6 @@ void sendExecutePCB(int fd, t_PCB *pcb, int quantum) {
 
 	int pcbSize = pcb_getPCBSize(pcb);
 
-//	request->serializedSize = pcbSize;
-//	request->serializedPCB = malloc(pcbSize);
-//	memcpy(request->serializedPCB, buffer, pcbSize);
-
 	int totalSize = sizeof(ipc_header) + sizeof(int) + sizeof(int) + pcbSize;
 
 	void *buffer = malloc(totalSize);
@@ -555,6 +646,7 @@ void sendExecutePCB(int fd, t_PCB *pcb, int quantum) {
 
 	send(fd, buffer, totalSize, 0);
 
+	free(pcbBuffer);
 	free(buffer);
 }
 
@@ -567,10 +659,9 @@ void *dispatcher_mainFunction(void) {
 		pthread_mutex_lock(&execList_mutex);
 		pthread_mutex_lock(&readyQueue_mutex);
 		t_PCB *program = readyQueue_popProcess();
-//		void *pcbBuffer = pcb_serializePCB(program);
 		t_CPUx *availableCPU = getAvailableCPU();
-		sendExecutePCB(availableCPU->fd, program, 5);
-//		send(availableCPU->fd, pcbBuffer, pcb_getPCBSize(program), 0);
+		execList_addProcess(program);
+		sendExecutePCB(availableCPU->fd, program, 5); //TODO: Mandar el quantum correcto
 		log_debug(logger,
 				"[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
 				program->pid, availableCPU->fd, pcb_getPCBSize(program));

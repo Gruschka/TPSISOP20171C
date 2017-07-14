@@ -178,7 +178,14 @@ typedef struct kernel_semaphore_wait {
 	ipc_header header;
 	int identifierLength;
 	char *identifier;
+	int serializedLength;
+	void *pcb;
 } __attribute__((packed)) ipc_struct_kernel_semaphore_wait;
+
+typedef struct kernel_semaphore_wait_response {
+	ipc_header header;
+	char shouldBlock;
+} __attribute__((packed)) ipc_struct_kernel_semaphore_wait_response;
 
 typedef struct cpu_execute_program {
 	ipc_header header;

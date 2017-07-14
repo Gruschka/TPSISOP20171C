@@ -69,6 +69,38 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 
 				deserializedStructHandler(fd, header->operationIdentifier, request);
 				break;
+			case KERNEL_SEMAPHORE_WAIT: {
+				ipc_header header;
+				recv(fd, &header, sizeof(ipc_header), 0);
+
+				int identifierLength;
+				recv(fd, &identifierLength, sizeof(int), 0);
+
+				char *identifier = malloc(identifierLength);
+				recv(fd, identifier, identifierLength, 0);
+
+				int serializedLength;
+				recv(fd, &serializedLength, sizeof(int), 0);
+
+
+				t_PCBVariableSize variableSize;
+				recv(fd, &variableSize, sizeof(t_PCBVariableSize), MSG_PEEK);
+
+				int bufferSize = pcb_getBufferSizeFromVariableSize(&variableSize);
+				void *pcbBuffer = malloc(bufferSize);
+				recv(fd, pcbBuffer, bufferSize, 0);
+
+
+				ipc_struct_kernel_semaphore_wait *semaphoreWait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
+				semaphoreWait->header = header;
+				semaphoreWait->identifierLength = identifierLength;
+				semaphoreWait->identifier = identifier;
+				semaphoreWait->serializedLength = serializedLength;
+				semaphoreWait->pcb = pcb_deSerializePCB(pcbBuffer, &variableSize);
+
+				deserializedStructHandler(fd, semaphoreWait->header.operationIdentifier, semaphoreWait);
+				break;
+			}
 			}
 		default:
 			break;
