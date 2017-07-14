@@ -61,4 +61,8 @@ t_PCB *blockQueue_popProcess(int pid);
 t_list *execList_create();
 void execList_addProcess(t_PCB *process);
 
+void dump_list(char *listName, t_list *list);
+t_PCB *findPCB(t_list *list, int pid);
+void removePCB(t_list *list, t_PCB *pcb);
+
 #endif /* SCHEDULING_H_ */

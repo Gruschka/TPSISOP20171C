@@ -119,3 +119,41 @@ t_PCB *blockQueue_popProcess(int pid) {
 
 	return NULL;
 }
+
+void dump_list(char *listName, t_list *list) {
+	int i;
+
+	if (list_size(list) == 0) {
+		printf("[%s] no processes\n", listName);
+		return;
+	}
+
+	for (i = 0; i < list_size(list); i++) {
+		t_PCB *pcb = list_get(list, i);
+		printf("[%s] process<PID: %d>", listName, pcb->pid);
+	}
+}
+
+t_PCB *findPCB(t_list *list, int pid) {
+	int i;
+
+	for (i = 0; i < list_size(list); i++) {
+		t_PCB *pcb = list_get(list, i);
+		if (pcb->pid == pid) {
+			return pcb;
+		}
+	}
+
+	return NULL;
+}
+
+void removePCB(t_list *list, t_PCB *pcb) {
+	int i;
+
+	for (i = 0; i < list_size(list); i++) {
+		t_PCB *pcbx = list_get(list, i);
+		if (pcbx->pid == pcb->pid) break;
+	}
+
+	list_remove(list, i);
+}
