@@ -393,7 +393,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		t_PCB *newProgram = createPCBFromScript(codeString);
 		newProgram->pid = ++lastPID;
 
-		int numberOfPages = newProgram->codePages;
+		int numberOfPages = newProgram->codePages + stackSize;
 		int pid = newProgram->pid;
 		int total = programStart->codeLength;
 
@@ -404,10 +404,10 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		}
 
 		int currentPage;
-		for (currentPage = 0; currentPage < numberOfPages; currentPage++) {
+		for (currentPage = 0; currentPage < newProgram->codePages; currentPage++) {
 			int size;
 
-			if (currentPage == numberOfPages - 1) { // la ultima pagina
+			if (currentPage == newProgram->codePages - 1) { // la ultima pagina
 				size = total - (currentPage * pageSize);
 			} else {
 				size = pageSize;
