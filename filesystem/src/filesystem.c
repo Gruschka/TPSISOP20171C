@@ -740,14 +740,16 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
 	}
 
 	fflush(stdin);
-	error = fgets(readValues, size, blockFilePointer);
+	//error = fread(readValues, sizeof(char),size, blockFilePointer);
+
+	error = fgets(readValues, size+1, blockFilePointer);
 
 	if(error == -1){
 		log_error(logger, "Error while reading on READ FILE operation");
 		return -1;
 	}
 
-	printf("Reading %d bytes with %d offset from block %d : %s \n", size,offset,blockNumberToRead, readValues);
+	printf("Reading %d bytes with %d offset from block %d : %s \n", strlen(readValues),offset,blockNumberToRead, readValues);
 
 	fclose(blockFilePointer);
 
@@ -799,7 +801,7 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 			// jump to next block
 			currentBlockNumber++;
 			currentBlock = fileMetadata.blocks[currentBlockNumber];
-			offsetBuffer += bytesUntilEndOfBlock;
+			offsetBuffer += strlen(buffer);
 			bytesUntilEndOfBlock = myFS.metadata.blockSize;
 			readOffset = 0;
 
@@ -807,10 +809,11 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockNumber], readOffset, bytesRemainingToRead);
 			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead);
 			bytesRemainingToRead = 0;
-			offsetBuffer += bytesRemainingToRead;
+			offsetBuffer += strlen(buffer);
 			break;
 
 		}
+		memset(buffer,0,sizeof(buffer));
 		free(buffer);
 
 	}
@@ -869,8 +872,9 @@ int main(int argc, char **argv) {
 
 
 	fs_dump();
-
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,129);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,65);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,9);
 	/*fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_dump();
 	 */
