@@ -54,6 +54,7 @@ typedef struct variableReference{
 
 typedef struct CPUConnection{
 	int socketFileDescriptor;
+	int isDummy;
 	t_CPUStatus status;
 	int portNumber;
 	char *host;
@@ -103,4 +104,5 @@ void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size);
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address);
 int cpu_sharedVariableGet(char *identifier);
 int cpu_sharedVariableSet(char *identifier, int value);
+int cpu_receivePCB();
 #endif /* CPU_H_ */
