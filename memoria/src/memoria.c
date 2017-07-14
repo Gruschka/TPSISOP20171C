@@ -176,18 +176,18 @@ int assignPageToProcess(int32_t processID, int32_t processPageNumber) {
 	return 1;
 }
 
-int numberOfPagesOwnedByProcess(int32_t processID) {
-	int numberOfPagesOwned = 0;
+int largestPageNumberOwnedByProcess(int32_t processID) {
+	int largestPageNumberOwnedByProcess = 0;
 
 	int i;
 	for (i = 0; i < k_numberOfPages; i++) {
 		mem_page_entry *entry = getPageEntryPointerForIndex(i);
-		if (entry->processID == processID) {
-			numberOfPagesOwned++;
+		if (entry->processID == processID && entry->processPageNumber > largestPageNumberOwnedByProcess) {
+			largestPageNumberOwnedByProcess = entry->processPageNumber;
 		}
 	}
 
-	return numberOfPagesOwned;
+	return largestPageNumberOwnedByProcess;
 }
 
 int *activeProcessesIDs() {
@@ -441,11 +441,11 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 		return 0;
 	}
 
-	int pagesOriginallyOwned = numberOfPagesOwnedByProcess(processID);
+	int firstPageNumberToAssign = largestPageNumberOwnedByProcess(processID) + 1;
 
 	int i;
 	for (i = 0; i < numberOfPages; i++) {
-		assignPageToProcess(processID, pagesOriginallyOwned + i);
+		assignPageToProcess(processID, firstPageNumberToAssign + i);
 	}
 
 	pthread_rwlock_unlock(&physicalMemoryRwlock);
@@ -453,9 +453,51 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 	return 1;
 }
 
+int mem_removePageFromProcess(int32_t processID, int32_t processPageNumber) {
+	pthread_rwlock_wrlock(&physicalMemoryRwlock);
+	pthread_rwlock_wrlock(&cacheMemoryRwlock);
+
+	if (!isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
+		pthread_rwlock_unlock(&cacheMemoryRwlock);
+		return 0;
+	}
+
+	// Si la página no existe, devolvemos error.
+	mem_page_entry *pageIndex = findPageIndex(processID, processPageNumber);
+	if (pageIndex == -1) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
+		pthread_rwlock_unlock(&cacheMemoryRwlock);
+		return 0;
+	}
+
+	// Si existe, la limpiamos
+	mem_page_entry *entry = getPageEntryPointerForIndex(pageIndex);
+	entry->processID = -1;
+	entry->processPageNumber = -1;
+
+	// Luego chequeamos si estaba en cache
+	mem_cached_page_entry *cacheEntry = cache_getEntryPointer(processID, processPageNumber);
+	if (cacheEntry != NULL) {
+		cacheEntry->processID = -1;
+		cacheEntry->processPageNumber = -1;
+		cacheEntry->lruCounter = 0;
+	}
+
+	pthread_rwlock_unlock(&physicalMemoryRwlock);
+	pthread_rwlock_unlock(&cacheMemoryRwlock);
+	return 1;
+}
+
 int mem_deinitProcess(int32_t processID) {
 	pthread_rwlock_wrlock(&physicalMemoryRwlock);
 	pthread_rwlock_wrlock(&cacheMemoryRwlock);
+
+	if (!isProcessAlreadyInitialized(processID)) {
+		pthread_rwlock_unlock(&physicalMemoryRwlock);
+		pthread_rwlock_unlock(&cacheMemoryRwlock);
+		return 0;
+	}
 
 	// Primero destruimos las entradas de las páginas
 	// de la memoria física
@@ -842,6 +884,19 @@ void *connection_handler(void *shit) {
 			response.success = result > 0 ? 1 : 0;
 
 			send(sockfd, &response, sizeof(ipc_struct_memory_request_more_pages_response), 0);
+			break;
+		}
+		case MEMORY_REMOVE_PAGE_FROM_PROGRAM: {
+			ipc_struct_memory_remove_page_from_program request;
+			recv(sockfd, &request, sizeof(ipc_struct_memory_remove_page_from_program), 0);
+			log_debug(consoleLog, "Remove page from program. pid: %d; pageNumber: %d", request.pid, request.pageNumber);
+			int result = mem_removePageFromProcess(request.pid, request.pageNumber);
+
+			ipc_struct_memory_remove_page_from_program_response response;
+			response.header.operationIdentifier = MEMORY_REMOVE_PAGE_FROM_PROGRAM_RESPONSE;
+			response.success = result > 0 ? 1 : 0;
+
+			send(sockfd, &response, sizeof(ipc_struct_memory_remove_page_from_program_response), 0);
 			break;
 		}
 		case MEMORY_DEINIT_PROGRAM: {
