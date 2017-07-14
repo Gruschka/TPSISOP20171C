@@ -28,6 +28,33 @@
 
 t_CPU myCPU;
 void *myMemory;
+char *program =
+//"#!/usr/bin/ansisop\n"
+//"\n"
+//"begin\n"
+//"!Global = !Global + 1\n"
+//"end\n";
+
+"begin\n"
+"	variables a\n"
+"	a <- f\n"
+"	prints n a\n"
+"end\n"
+"\n"
+"function f\n"
+"	variables a\n"
+"	a=1\n"
+"	prints n a\n"
+"	a <- g\n"
+"	return a\n"
+"end\n"
+"\n"
+"function g\n"
+"	variables a\n"
+"	a=0\n"
+"	prints n a\n"
+"	return a\n"
+"end\n";
 
 t_log *logger;
 void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size){
@@ -41,6 +68,7 @@ uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint
 	memcpy(myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,buffer,size);
 }
 void *cpu_readMemory(int pid, int page, int offset, int size) {
+	if(myCPU.connections[T_MEMORY].isDummy) return cpu_readMemoryDummy(pid,page,offset,size);
 	int fd = myCPU.connections[T_MEMORY].socketFileDescriptor;
 
 	ipc_client_sendMemoryRead(fd, pid, page, offset, size);
@@ -48,18 +76,23 @@ void *cpu_readMemory(int pid, int page, int offset, int size) {
 }
 
 void cpu_writeMemory(int pid, int page, int offset, int size, void *buffer) {
-	int fd = myCPU.connections[T_MEMORY].socketFileDescriptor;
+	if(myCPU.connections[T_MEMORY].isDummy){
+		cpu_writeMemoryDummy(pid,page,offset,size,buffer);
+	}else{
+		int fd = myCPU.connections[T_MEMORY].socketFileDescriptor;
 
-	ipc_client_sendMemoryWrite(fd, pid, page, offset, size, buffer);
+		ipc_client_sendMemoryWrite(fd, pid, page, offset, size, buffer);
+	}
+
 }
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
-	CPU->connections[T_KERNEL].host = "127.0.0.1";
+	CPU->connections[T_KERNEL].host = "10.0.1.138";
 	CPU->connections[T_KERNEL].portNumber = 5001;
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "127.0.0.1";
+	CPU->connections[T_MEMORY].host = "10.0.1.138";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -82,6 +115,7 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 			memset(myMemory,0,512*4);
 			aCPU->connections[1].portNumber = 9999;
 			aCPU->connections[1].status = CONNECTED;
+			aCPU->connections[T_MEMORY].isDummy = 1;
 			printf("\nConnected to memory\n");
 			return 0;
 			break;
@@ -113,12 +147,14 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 			   ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(myCPU.connections[T_KERNEL].socketFileDescriptor);
 			   free(response);
 			   kernelConnection->status = CONNECTED;
+			   aCPU->connections[T_KERNEL].isDummy = 0;
 			   printf("CONNECTED TO KERNEL");
 
 			break;
 		case T_D_KERNEL:
 			printf("\nConnecting to Dummy Kernel\n");
 			aCPU->connections[KERNEL].status = CONNECTED;
+			aCPU->connections[T_KERNEL].isDummy = 1;
 			printf("\nConnected to Dummy Kernel\n");
 			break;
 		case T_MEMORY:
@@ -148,6 +184,7 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 //			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
 			   free(response);
 			   memoryConnection->status = CONNECTED;
+			   aCPU->connections[T_MEMORY].isDummy = 1;
 			   printf("CONNECTED TO Memory");
 			break;
 		default:
@@ -234,7 +271,7 @@ uint32_t cpu_getVariablePosition(char variableName){
 }
 int cpu_dereference(uint32_t variableAddress){
 	//rintf("dereference\n");
-	int *valueBuffer = cpu_readMemoryDummy(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int));
+	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int));
 	int value = *valueBuffer;
 	free(valueBuffer);
 	return value;
@@ -242,7 +279,7 @@ int cpu_dereference(uint32_t variableAddress){
 void cpu_assignValue(uint32_t variableAddress, int value){
 	//printf("assignValue\n");
 	int valueBuffer = value;
-	cpu_writeMemoryDummy(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int),&valueBuffer);
+	cpu_writeMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int),&valueBuffer);
 }
 void cpu_gotoLabel(char *label){
 	printf("gotoLabel\n");
@@ -299,7 +336,7 @@ void cpu_return(int returnValue){
 	t_PCBVariableSize variableSize = pcb_getSizeOfSpecificStack(record);
 
 	//write return value in return variable
-	cpu_writeMemoryDummy(myCPU.assignedPCB->pid,record->returnVariable.page,record->returnVariable.offset,record->returnVariable.size,&returnValueCopy);
+	cpu_writeMemory(myCPU.assignedPCB->pid,record->returnVariable.page,record->returnVariable.offset,record->returnVariable.size,&returnValueCopy);
 
 	//decompile stack
 	pcb_decompileStack(myCPU.assignedPCB);
@@ -309,18 +346,36 @@ void cpu_return(int returnValue){
 
 ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *identifier) {
 	ipc_struct_kernel_semaphore_wait *wait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
-
-	wait->header.operationIdentifier = KERNEL_SEMAPHORE_WAIT;
-	wait->identifierLength = strlen(identifier + 1);
-
-	wait->identifier = malloc(strlen(identifier) + 1);
-	memcpy(wait->identifier, identifier, strlen(identifier) + 1);
+	char * identifierCopy = strdup(identifier);
 
 	uint32_t pcbSize = pcb_getPCBSize(myCPU.assignedPCB);
+	wait->header.operationIdentifier = KERNEL_SEMAPHORE_WAIT;
+	wait->identifierLength = strlen(identifier)+1;
+	wait->identifier = malloc(strlen(identifier) + 1);
+	memcpy(wait->identifier, identifier, strlen(identifier) + 1);
 	wait->serializedLength = pcbSize;
-	memcpy(wait->pcb, pcb_serializePCB(myCPU.assignedPCB), pcbSize);
+	wait->pcb = pcb_serializePCB(myCPU.assignedPCB);
 
-	send(fd, wait, sizeof(ipc_header) + sizeof(int) + strlen(identifier) + 1, 0);
+	int bufferSize = 0;
+	int bufferOffset = 0;
+	bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(identifier)+1 + pcbSize;
+	char *buffer = malloc(bufferSize);
+
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&wait->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&wait->identifierLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,identifierCopy,strlen(identifier)+1);
+	bufferOffset += strlen(identifier) + 1;
+
+	memcpy(buffer+bufferOffset,&wait->pcb,strlen(identifier)+1);
+	bufferOffset += pcbSize;
+
+	send(fd, buffer, bufferSize, 0);
 
 	ipc_struct_kernel_semaphore_wait_response response;
 	recv(fd, &response, sizeof(ipc_struct_kernel_semaphore_wait_response), 0);
@@ -391,13 +446,42 @@ int cpu_sharedVariableGet(char *identifier){
 int cpu_sharedVariableSet(char *identifier, int value){
 	printf("sharedVariableSet");
 }
+int cpu_receivePCB(){
+	if(myCPU.connections[T_KERNEL].isDummy){
+		char *testProgram = strdup(program);
+		printf("writing program: %s", testProgram);
+		memcpy(myMemory,testProgram,strlen(testProgram));
 
-char *program =
-"#!/usr/bin/ansisop\n"
-"\n"
-"begin\n"
-"!Global = !Global + 1\n"
-"end\n";
+		myCPU.assignedPCB = cpu_createPCBFromScript(testProgram);
+		myCPU.status = RUNNING;
+		myCPU.quantum = 9999;
+		return 0;
+	}
+
+	ipc_header header;
+	recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &header, sizeof(ipc_header), 0);
+
+	int quantum;
+	recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &quantum, sizeof(int), 0);
+
+	int serializedSize;
+	recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &serializedSize, sizeof(int), 0);
+
+	t_PCBVariableSize *variableSize = malloc(sizeof(t_PCBVariableSize));
+	recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableSize, sizeof(t_PCBVariableSize), MSG_PEEK);
+
+	uint32_t serializedPCBSize = pcb_getBufferSizeFromVariableSize(variableSize);
+
+	void *pcbBuffer = malloc(serializedPCBSize);
+	recv(myCPU.connections[T_KERNEL].socketFileDescriptor, pcbBuffer, serializedPCBSize, 0);
+	t_PCB *pcbToExecute = pcb_deSerializePCB(pcbBuffer, variableSize);
+
+	myCPU.assignedPCB = pcbToExecute;
+	myCPU.quantum = quantum;
+	myCPU.status = RUNNING;
+	return 0;
+}
+
 
 
  AnSISOP_funciones functions = {
@@ -435,38 +519,15 @@ int main() {
 	cpu_start(&myCPU);
 
 	// connect to memory -- DUMMY
-	cpu_connect(&myCPU,T_MEMORY);
-	cpu_connect(&myCPU,T_KERNEL);
-//	char *testProgram = strdup(program);
-//	//printf("writing program: %s", testProgram);
-//	memcpy(myMemory,testProgram,strlen(testProgram));
+	cpu_connect(&myCPU,T_D_MEMORY);
+	cpu_connect(&myCPU,T_D_KERNEL);
 
 
-
-   //wait for PCB
 	while (1) {
 		myCPU.status = WAITING;
-		ipc_header header;
-		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &header, sizeof(ipc_header), 0);
 
-		int quantum;
-		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &quantum, sizeof(int), 0);
-
-		int serializedSize;
-		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, &serializedSize, sizeof(int), 0);
-
-		t_PCBVariableSize *variableSize = malloc(sizeof(t_PCBVariableSize));
-		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableSize, sizeof(t_PCBVariableSize), MSG_PEEK);
-
-		uint32_t serializedPCBSize = pcb_getBufferSizeFromVariableSize(variableSize);
-
-		void *pcbBuffer = malloc(serializedPCBSize);
-		recv(myCPU.connections[T_KERNEL].socketFileDescriptor, pcbBuffer, serializedPCBSize, 0);
-		t_PCB *pcbToExecute = pcb_deSerializePCB(pcbBuffer, variableSize);
-
-		myCPU.assignedPCB = pcbToExecute;
-		myCPU.quantum = quantum;
-		myCPU.status = RUNNING;
+		//wait for PCB
+		cpu_receivePCB();
 
 		while(myCPU.status == RUNNING && myCPU.quantum > 0){
 			   //cpu fetch
@@ -474,8 +535,8 @@ int main() {
 			   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
 			   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
 
-			   char *instruction = cpu_readMemoryDummy(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
-			   instruction[currentInstructionIndex.size]='\0';
+			   char *instruction = cpu_readMemory(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
+			   instruction[currentInstructionIndex.size-1]='\0';
 			   fflush(stdout);
 			   printf("fetched instruction is: %s\n",(char *) instruction);
 			   fflush(stdout);
@@ -513,9 +574,7 @@ int main() {
 //   pcb_dump(newPCB);
 //
 //
-//   myCPU.assignedPCB = newPCB;
-//   myCPU.status = RUNNING;
-//   myCPU.quantum = 9999;
+
 
    //instruction cycle
 
