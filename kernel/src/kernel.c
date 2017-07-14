@@ -50,6 +50,7 @@ pthread_t configurationWatcherThread;
 
 uint32_t lastPID = 1;
 uint32_t pageSize = 256;
+uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
 
