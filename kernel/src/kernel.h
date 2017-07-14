@@ -24,10 +24,15 @@ typedef struct t_kernel_config {
 	int multiprogrammingDegree;
 	int stackSize;
 	char **semaphoreIDs;
-	int *semaphoreValues;
+	char **semaphoreValues;
 	char **sharedVariableNames;
 	//TODO: Agregar semaforos y variables compartidas
 } t_kernel_config;
+
+typedef struct active_console {
+	int fd;
+	int pid;
+} t_active_console;
 
 typedef struct t_CPU {
 	int fd;
