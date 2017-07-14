@@ -504,6 +504,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		if (pcb != NULL) {
 			removePCB(readyQueue, pcb);
 		}
+		// todo: revisar las otras listas
 		pthread_mutex_unlock(&readyQueue_mutex);
 		//TODO: enviarle a la memoria para liberar los recursos
 		break;
@@ -569,6 +570,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 	case KERNEL_SEMAPHORE_WAIT: {
 		ipc_struct_kernel_semaphore_wait *wait = buffer;
 		log_info(logger, "kernel_semaphore_wait. identifier: %s", wait->identifier);
+		t_PCB *waitPCB = wait->pcb;
 
 		kernel_semaphore *sem = getSemaphoreByIdentifier(wait->identifier);
 		ipc_struct_kernel_semaphore_wait_response response;
@@ -576,6 +578,16 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 		response.shouldBlock = kernel_semaphore_wait(sem, list_get(execList, 0)) == 0 ? 1 : 0;
 		send(fd, &response, sizeof(ipc_struct_kernel_semaphore_wait_response), 0);
+
+		if (response.shouldBlock == 1) {
+			pthread_mutex_lock(&execList_mutex);
+			pthread_mutex_lock(&blockQueue_mutex);
+			t_PCB *processToBeBlocked = list_takePCB(execList, waitPCB->pid);
+			blockQueue_addProcess(processToBeBlocked);
+			pthread_mutex_unlock(&blockQueue_mutex);
+			pthread_mutex_unlock(&execList_mutex);
+		}
+
 		break;
 	}
 	default:
@@ -660,7 +672,7 @@ void *dispatcher_mainFunction(void) {
 		t_PCB *program = readyQueue_popProcess();
 		t_CPUx *availableCPU = getAvailableCPU();
 		execList_addProcess(program);
-		sendExecutePCB(availableCPU->fd, program, 5); //TODO: Mandar el quantum correcto
+		sendExecutePCB(availableCPU->fd, program, configuration->schedulingAlgorithm == ROUND_ROBIN ? configuration->quantum : -1);
 		log_debug(logger,
 				"[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
 				program->pid, availableCPU->fd, pcb_getPCBSize(program));

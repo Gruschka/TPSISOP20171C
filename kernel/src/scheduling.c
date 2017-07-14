@@ -157,3 +157,16 @@ void removePCB(t_list *list, t_PCB *pcb) {
 
 	list_remove(list, i);
 }
+
+t_PCB *list_takePCB(t_list *list, int pid) {
+	int i;
+	t_PCB *pcb = NULL;
+
+	for (i = 0; i < list_size(list); i++) {
+		pcb = list_get(list, i);
+		if (pcb->pid == pid) break;
+	}
+
+	if (pcb == NULL) return NULL;
+	return list_remove(list, i);
+}

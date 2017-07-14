@@ -64,5 +64,6 @@ void execList_addProcess(t_PCB *process);
 void dump_list(char *listName, t_list *list);
 t_PCB *findPCB(t_list *list, int pid);
 void removePCB(t_list *list, t_PCB *pcb);
+t_PCB *list_takePCB(t_list *list, int pid);
 
 #endif /* SCHEDULING_H_ */
