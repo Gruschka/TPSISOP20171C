@@ -245,17 +245,10 @@ int memory_sendRequestMorePages(int pid, int numberOfPages) {
 
 	send(memory_sockfd, &request, sizeof(request), 0);
 
-	ipc_header responseHeader;
-	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+	ipc_struct_memory_request_more_pages_response response;
+	recv(memory_sockfd, &response, sizeof(ipc_struct_memory_request_more_pages_response), 0);
 
-	if (responseHeader.operationIdentifier == MEMORY_REQUEST_MORE_PAGES_RESPONSE) {
-		char success;
-
-		recv(memory_sockfd, &success, sizeof(char), 0);
-		return (success != 0) ? 1 : -1;
-	}
-
-	return -1;
+	return (response.success != 0) ? response.firstPageNumber : -1;
 }
 
 int memory_sendRemovePageFromProgram(int pid, int pageNumber) {
@@ -351,7 +344,19 @@ void showMenu() {
 	} while (optionIndex != 0);
 }
 
+typedef struct kernel_page_assignation {
+    int32_t processID;
+    int32_t processPageNumber;
+    int32_t availableBytes;
+} kernel_page_assignation;
+
+t_list *kernel_page_assignations_list;
+
 int main(int argc, char **argv) {
+	// CÓDIGO DEL FEDE BIEN XETO?
+	kernel_page_assignations_list = list_create();
+	// TERMINA EL CÓDIGO DE FEDE BIEN XETO,
+
 	char *logFile = tmpnam(NULL);
 
 #ifdef DEBUG
@@ -456,14 +461,6 @@ void fetchConfiguration() {
 }
 
 ///////////////////////////// Consoles server /////////////////////////////////
-
-typedef struct kernel_page_assignation {
-    int32_t processID;
-    int32_t processPageNumber;
-    int32_t availableBytes;
-} kernel_page_assignation;
-
-//t_list *list = list_create()
 
 void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
@@ -600,6 +597,35 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.value = getSharedVariableValue(request->identifier);
 
 		send(fd, &response, sizeof(ipc_struct_get_shared_variable_response), 0);
+		break;
+	}
+	case KERNEL_ALLOC_HEAP: {
+		ipc_struct_kernel_alloc_heap *request = buffer;
+		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
+
+		int firstPageNumber = memory_sendRequestMorePages(request->processID, 1);
+		if (firstPageNumber == 0) {
+			ipc_struct_kernel_alloc_heap_response response;
+			response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
+			response.success = 0;
+			response.pageNumber = -1;
+			response.offset = -1;
+			end(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+		}
+
+		kernel_page_assignation *page_assignation = malloc(sizeof(kernel_page_assignation));
+		page_assignation->processID = request->processID;
+		page_assignation->processPageNumber = firstPageNumber;
+		page_assignation->availableBytes = 200;
+		list_add(kernel_page_assignations_list, page_assignation);
+
+		ipc_struct_kernel_alloc_heap_response response;
+		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
+		response.success = 1;
+		response.pageNumber = page_assignation->processPageNumber;
+		response.offset = 0; //fixme
+
+		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
 		break;
 	}
 	case PROGRAM_FINISH: {
