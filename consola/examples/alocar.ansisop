@@ -1,0 +1,8 @@
+#!/usr/bin/ansisop
+
+begin
+	variables a
+	alocar a 20
+	*a = 123
+	print *a
+end
