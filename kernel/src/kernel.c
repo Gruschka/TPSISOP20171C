@@ -610,7 +610,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			response.success = 0;
 			response.pageNumber = -1;
 			response.offset = -1;
-			end(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+			send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
 		}
 
 		kernel_page_assignation *page_assignation = malloc(sizeof(kernel_page_assignation));
