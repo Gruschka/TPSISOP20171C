@@ -402,7 +402,6 @@ ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *id
 
 	return response;
 }
-
 ipc_struct_kernel_semaphore_signal ipc_sendSemaphoreSignal(int fd, char *identifier){
 	ipc_struct_kernel_semaphore_signal*signal = malloc(sizeof(ipc_struct_kernel_semaphore_signal));
 	char * identifierCopy = strdup(identifier);
@@ -432,6 +431,29 @@ ipc_struct_kernel_semaphore_signal ipc_sendSemaphoreSignal(int fd, char *identif
 
 	return *signal;
 }
+ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_kernel_alloc_heap *request){
+	int bufferSize = sizeof(ipc_struct_kernel_alloc_heap);
+	int bufferOffset = 0;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&request->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request->processID,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request->numberOfBytes,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_alloc_heap_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+
+	return response;
+
+}
 
 void cpu_kernelWait(char *semaphoreId){
 	printf("kernelWait\n");
@@ -447,7 +469,16 @@ void cpu_kernelSignal(char *semaphoreId){
 }
 uint32_t cpu_kernelAlloc(int size){
 	printf("kernelAlloc\n");
+	ipc_struct_kernel_alloc_heap request;
+	request.header.operationIdentifier = KERNEL_ALLOC_HEAP;
+	request.numberOfBytes = size;
+	request.processID = myCPU.assignedPCB->pid;
+	ipc_struct_kernel_alloc_heap_response response = ipc_sendKernelAlloc(myCPU.connections[T_KERNEL].socketFileDescriptor,&request);
 	fflush(stdout);
+	t_stackVariable variable;
+	variable.page = response.pageNumber;
+	variable.offset = response.offset;
+	return cpu_getPointerFromVariableReference(variable);
 }
 void cpu_kernelFree(uint32_t pointer){
 	printf("kernelFree\n");
