@@ -585,7 +585,7 @@ void consolesServerSocket_handleDisconnection(int fd) {
 
 kernel_heap_metadata *getKernelHeapMetadata(kernel_page_assignment *assignment, int32_t size) {
 	kernel_heap_metadata *metadata = malloc(sizeof(kernel_heap_metadata));
-	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, sizeof(kernel_heap_metadata), metada);
+	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, sizeof(kernel_heap_metadata));
 }
 
 ///////////////////////////// CPUs server /////////////////////////////////
