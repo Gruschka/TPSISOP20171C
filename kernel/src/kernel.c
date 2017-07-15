@@ -344,22 +344,11 @@ void showMenu() {
 	} while (optionIndex != 0);
 }
 
-typedef struct kernel_page_assignation {
-    int32_t processID;
-    int32_t processPageNumber;
-    int32_t availableBytes;
-} kernel_page_assignment;
-
-t_list *kernel_page_assignments_list;
-
-typedef struct kernel_heap_metadata  {
-	int32_t size;
-	char isFree;
-} kernel_heap_metadata;
+t_list *heap_page_assignments_list;
 
 int main(int argc, char **argv) {
 	// CÓDIGO DEL FEDE BIEN XETO?
-	kernel_page_assignments_list = list_create();
+	heap_page_assignments_list = list_create();
 	// TERMINA EL CÓDIGO DE FEDE BIEN XETO,
 
 	char *logFile = tmpnam(NULL);
@@ -589,7 +578,18 @@ void consolesServerSocket_handleDisconnection(int fd) {
 
 ////// Heap
 
-int getOffsetAvailableHeapMetadata(kernel_page_assignment *assignment, int32_t neededSize) {
+typedef struct heap_page_assignment {
+    int32_t processID;
+    int32_t processPageNumber;
+    int32_t availableBytes;
+} heap_page_assignment;
+
+typedef struct heap_metadata  {
+	int32_t size;
+	char isFree;
+} heap_metadata;
+
+int heap_getOffsetForAvailableMetadata(heap_page_assignment *assignment, int32_t neededSize) {
 	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize);
 	void *page = ipc_client_waitMemoryReadResponse(memory_sockfd)->buffer;
 	if (page == NULL) {
@@ -597,17 +597,17 @@ int getOffsetAvailableHeapMetadata(kernel_page_assignment *assignment, int32_t n
 		return -1;
 	}
 
-	kernel_heap_metadata *metadata = NULL;
+	heap_metadata *metadata = NULL;
 
 	int offset;
-	for (offset = 0; (pageSize - offset - 1 - sizeof(kernel_heap_metadata)) >= (neededSize + sizeof(kernel_heap_metadata));) {
-		kernel_heap_metadata *m = page + offset;
-		if (m->isFree == 1 && m->size >= (neededSize + sizeof(kernel_heap_metadata))) {
+	for (offset = 0; (pageSize - offset - 1 - sizeof(heap_metadata)) >= (neededSize + sizeof(heap_metadata));) {
+		heap_metadata *m = page + offset;
+		if (m->isFree == 1 && m->size >= (neededSize + sizeof(heap_metadata))) {
 			metadata = m;
 			break;
 		}
 
-		offset = offset + sizeof(kernel_heap_metadata) + m->size;
+		offset = offset + sizeof(heap_metadata) + m->size;
 	}
 
 	if (metadata != NULL) {
@@ -615,9 +615,9 @@ int getOffsetAvailableHeapMetadata(kernel_page_assignment *assignment, int32_t n
 		metadata->isFree = 0;
 		metadata->size = neededSize;
 
-		kernel_heap_metadata *nextM = metadata + sizeof(kernel_heap_metadata) + metadata->size;
+		heap_metadata *nextM = metadata + sizeof(heap_metadata) + metadata->size;
 		nextM->isFree = 1;
-		nextM->size = previousFreeSize - (neededSize + sizeof(kernel_heap_metadata));
+		nextM->size = previousFreeSize - (neededSize + sizeof(heap_metadata));
 
 		ipc_client_sendMemoryWrite(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize, page);
 		ipc_struct_memory_write_response response;
@@ -628,13 +628,37 @@ int getOffsetAvailableHeapMetadata(kernel_page_assignment *assignment, int32_t n
 			return -1;
 		}
 
-		assignment->availableBytes = assignment->availableBytes - (neededSize + sizeof(kernel_heap_metadata));
+		assignment->availableBytes = assignment->availableBytes - (neededSize + sizeof(heap_metadata));
 		free(page);
-		return offset + sizeof(kernel_heap_metadata);
+		return offset + sizeof(heap_metadata);
 	}
 
 	free(page);
 	return -1;
+}
+
+int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
+	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize);
+	void *page = ipc_client_waitMemoryReadResponse(memory_sockfd)->buffer;
+	if (page == NULL) {
+		//fixme manejar
+		return 0;
+	}
+
+	heap_metadata *metadata = page + offset - sizeof(heap_metadata);
+	if (metadata->isFree == 1) {
+		// La metadata ya estaba disponible, es un error
+		//fixme manejar error
+		free(page);
+		return 0;
+	}
+
+	metadata->isFree = 1;
+
+	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
+
+	free(page);
+	return 1;
 }
 
 ///////////////////////////// CPUs server /////////////////////////////////
@@ -664,14 +688,14 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_alloc_heap *request = buffer;
 		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
 
-		kernel_page_assignment *assignment = NULL;
+		heap_page_assignment *assignment = NULL;
 		int offset = -1;
 
 		int i;
-		for (i = 0; i < list_size(kernel_page_assignments_list); i++) {
-			kernel_page_assignment *a = list_get(kernel_page_assignments_list, i);
-			if (a->processID == request->processID && a->availableBytes >= (request->numberOfBytes + sizeof(kernel_heap_metadata))) {
-				int o = getOffsetAvailableHeapMetadata(a, request->numberOfBytes);
+		for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+			heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+			if (a->processID == request->processID && a->availableBytes >= (request->numberOfBytes + sizeof(heap_metadata))) {
+				int o = heap_getOffsetForAvailableMetadata(a, request->numberOfBytes);
 				if (o != -1) {
 					offset = o;
 					assignment = a;
@@ -699,15 +723,15 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 			// El pedido fue exitoso, generamos un registro de la asignación
 			// y lo agregamos a la lista
-			assignment = malloc(sizeof(kernel_page_assignment));
+			assignment = malloc(sizeof(heap_page_assignment));
 			assignment->processID = request->processID;
 			assignment->processPageNumber = pageNumber;
 			assignment->availableBytes = pageSize;
 
-			kernel_heap_metadata *heap_metadata = malloc(sizeof(kernel_heap_metadata));
+			heap_metadata *heap_metadata = malloc(sizeof(heap_metadata));
 			heap_metadata->isFree = 1;
-			heap_metadata->size = pageSize - sizeof(kernel_heap_metadata);
-			ipc_client_sendMemoryWrite(memory_sockfd, request->processID, pageNumber, 0, sizeof(kernel_heap_metadata), heap_metadata);
+			heap_metadata->size = pageSize - sizeof(heap_metadata);
+			ipc_client_sendMemoryWrite(memory_sockfd, request->processID, pageNumber, 0, sizeof(heap_metadata), heap_metadata);
 			ipc_struct_memory_write_response response;
 			recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
 			if (response.success == 0) {
@@ -715,8 +739,8 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 				return;
 			}
 			free(heap_metadata);
-			list_add(kernel_page_assignments_list, assignment);
-			offset = 0 + sizeof(kernel_heap_metadata);
+			list_add(heap_page_assignments_list, assignment);
+			offset = 0 + sizeof(heap_metadata);
 		}
 
 		// Ya tengo la asignación indicada y un offset
@@ -727,6 +751,37 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.offset = offset;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+		break;
+	}
+	case KERNEL_DEALLOC_HEAP: {
+		ipc_struct_kernel_dealloc_heap *request = buffer;
+		log_info(logger, "KERNEL_DEALLOC_HEAP. processID: %d; pageNumber: %d; offset: %d.", request->processID, request->pageNumber, request->offset);
+
+		heap_page_assignment *assignment;
+
+		int i;
+		for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+			heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+			if (a->processID == request->processID && a->processPageNumber == request->pageNumber) {
+				assignment = a;
+				break;
+			}
+		}
+
+		if (assignment == NULL) {
+			// No se encontró alloc que corresponda con el pedido de dealloc
+			//fixme manejar error
+			return;
+		}
+
+		int success = heap_freeMetadata(assignment, request->offset);
+
+		ipc_struct_kernel_dealloc_heap_response response;
+		response.header.operationIdentifier = KERNEL_DEALLOC_HEAP_RESPONSE;
+		response.success = success;
+
+		send(fd, &response, sizeof(ipc_struct_kernel_dealloc_heap_response), 0);
+
 		break;
 	}
 	case PROGRAM_FINISH: {

@@ -140,8 +140,7 @@ int ipc_createServer(char *port,
 			break;
 		}
 		case KERNEL_DEALLOC_HEAP: {
-			ipc_struct_kernel_dealloc_heap *alloc = malloc(
-			sizeof(ipc_struct_kernel_dealloc_heap));
+			ipc_struct_kernel_dealloc_heap *alloc = malloc(sizeof(ipc_struct_kernel_dealloc_heap));
 			recv(fd, alloc, sizeof(ipc_struct_kernel_dealloc_heap), 0);
 
 			deserializedStructHandler(fd, alloc->header.operationIdentifier, alloc);
