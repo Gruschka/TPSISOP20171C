@@ -759,7 +759,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
 	error = fgets(readValues, size+1, blockFilePointer);
 
 	if(error == NULL){
-		log_error(logger, "Error while reading on READ FILE operation");
+		log_error(logger, "Error while reading on READ FILE operation (sparse)");
 		return 'f';
 	}
 
@@ -794,7 +794,9 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 	FILE *filePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
 
-	int amountOfBlocksInMetadata = 1 + fileMetadata.size / myFS.metadata.blockSize;
+	int amountOfBlocksInMetadata = fileMetadata.size / myFS.metadata.blockSize;
+	int floatingPoint = fileMetadata.size % myFS.metadata.blockSize;
+	if(floatingPoint > 0) amountOfBlocksInMetadata++;
 	int currentBlockIndex = offset / myFS.metadata.blockSize;
 	int finalBlockToRead =  1 + (offset + size) / myFS.metadata.blockSize;
 
@@ -835,7 +837,7 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockIndex], readOffset, bytesRemainingToRead);
 			if(buffer == 'f') return -1; //fails
 
-			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead);
+			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead+1);
 			bytesRemainingToRead = 0;
 			offsetBuffer += strlen(buffer);
 			break;
@@ -896,8 +898,8 @@ int main(int argc, char **argv) {
 	fs_mount(&myFS);
 
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
+	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
+	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
 
 	//char *bafer = string_new();
 
@@ -911,7 +913,7 @@ int main(int argc, char **argv) {
 	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
 
 	string_append(&bafer,"c");
-    fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288,strlen(bafer),bafer);
+    fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332287,strlen(bafer),bafer);
 
 
 	fs_dump();
@@ -919,7 +921,7 @@ int main(int argc, char **argv) {
 
 
 
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288, 1);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332287, 1);
 	 /*fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64, 65);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 75);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",123123, 10);
