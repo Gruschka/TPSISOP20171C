@@ -196,7 +196,7 @@ int connectToMemory() {
 		return -1;
 	}
 
-	server = gethostbyname("10.0.1.143");
+	server = gethostbyname(configuration->memoryIP);
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	bcopy((char *) server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
@@ -705,6 +705,20 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "kernel_semaphore_signal. identifier: %s", signal->identifier);
 		kernel_semaphore *sem = getSemaphoreByIdentifier(signal->identifier);
 		kernel_semaphore_signal(sem, NULL);
+		break;
+	}
+	case KERNEL_OPEN_FILE: {
+		ipc_struct_kernel_open_file *openFile = buffer;
+		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %d%d%d", openFile->path, openFile->creation, openFile->read, openFile->write);
+
+		break;
+	}
+	case KERNEL_READ_FILE: {
+		ipc_struct_kernel_read_file *readFile = buffer;
+		break;
+	}
+	case KERNEL_MOVE_FILE_CURSOR: {
+		ipc_struct_kernel_move_file_cursor *moveFileCursor = buffer;
 		break;
 	}
 	default:
