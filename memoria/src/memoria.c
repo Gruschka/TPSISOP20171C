@@ -464,7 +464,7 @@ int mem_removePageFromProcess(int32_t processID, int32_t processPageNumber) {
 	}
 
 	// Si la página no existe, devolvemos error.
-	mem_page_entry *pageIndex = findPageIndex(processID, processPageNumber);
+	int pageIndex = findPageIndex(processID, processPageNumber);
 	if (pageIndex == -1) {
 		pthread_rwlock_unlock(&physicalMemoryRwlock);
 		pthread_rwlock_unlock(&cacheMemoryRwlock);
