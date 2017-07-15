@@ -616,7 +616,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		kernel_page_assignation *page_assignation = malloc(sizeof(kernel_page_assignation));
 		page_assignation->processID = request->processID;
 		page_assignation->processPageNumber = firstPageNumber;
-		page_assignation->availableBytes = 200;
+		page_assignation->availableBytes = 200; //fixme
 		list_add(kernel_page_assignations_list, page_assignation);
 
 		ipc_struct_kernel_alloc_heap_response response;
