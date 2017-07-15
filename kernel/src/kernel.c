@@ -583,9 +583,52 @@ void consolesServerSocket_handleDisconnection(int fd) {
 
 ////// Heap
 
-kernel_heap_metadata *getKernelHeapMetadata(kernel_page_assignment *assignment, int32_t size) {
-	kernel_heap_metadata *metadata = malloc(sizeof(kernel_heap_metadata));
-	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, sizeof(kernel_heap_metadata));
+int getOffsetAvailableHeapMetadata(kernel_page_assignment *assignment, int32_t neededSize) {
+	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize);
+	void *page = ipc_client_waitMemoryReadResponse(memory_sockfd)->buffer;
+	if (page == NULL) {
+		//fixme manejar
+		return -1;
+	}
+
+	kernel_heap_metadata *metadata = NULL;
+
+	int offset;
+	for (offset = 0; (pageSize - offset - 1 - sizeof(kernel_heap_metadata)) >= (neededSize + sizeof(kernel_heap_metadata));) {
+		kernel_heap_metadata *m = page + offset;
+		if (m->isFree == 1 && m->size >= (neededSize + sizeof(kernel_heap_metadata))) {
+			metadata = m;
+			break;
+		}
+
+		offset = offset + sizeof(kernel_heap_metadata) + m->size;
+	}
+
+	if (metadata != NULL) {
+		int previousFreeSize = metadata->size;
+		metadata->isFree = 0;
+		metadata->size = neededSize;
+
+		kernel_heap_metadata *nextM = metadata + sizeof(kernel_heap_metadata) + metadata->size;
+		nextM->isFree = 1;
+		nextM->size = previousFreeSize - (neededSize + sizeof(kernel_heap_metadata));
+
+		ipc_client_sendMemoryWrite(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize, page);
+		ipc_struct_memory_write_response response;
+		recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
+		if (response.success == 0) {
+			//fixme manejar error
+			free(page);
+			return -1;
+		}
+
+		assignment->availableBytes = assignment->availableBytes - (neededSize + sizeof(kernel_heap_metadata));
+		free(page);
+		return offset + sizeof(kernel_heap_metadata);
+	}
+
+	free(page);
+	return -1;
 }
 
 ///////////////////////////// CPUs server /////////////////////////////////
@@ -616,17 +659,22 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
 
 		kernel_page_assignment *assignment = NULL;
+		int offset = -1;
 
 		int i;
 		for (i = 0; i < list_size(kernel_page_assignments_list); i++) {
 			kernel_page_assignment *a = list_get(kernel_page_assignments_list, i);
 			if (a->processID == request->processID && a->availableBytes >= (request->numberOfBytes + sizeof(kernel_heap_metadata))) {
-				//FIXME: leer la memoria y analizar con los metadata
-				assignment = a;
+				int o = getOffsetAvailableHeapMetadata(a, request->numberOfBytes);
+				if (o != -1) {
+					offset = o;
+					assignment = a;
+					break;
+				}
 			}
 		}
 
-		if (assignment == NULL) {
+		if (assignment == NULL || offset == -1) {
 			// Si es NULL, entonces no queda ninguna página de heap
 			// para este proceso, que le queden disponibles X
 			// bytes contiguos disponibles para almacenar lo pedido.
@@ -654,9 +702,15 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			heap_metadata->isFree = 1;
 			heap_metadata->size = pageSize - sizeof(kernel_heap_metadata);
 			ipc_client_sendMemoryWrite(memory_sockfd, request->processID, pageNumber, 0, sizeof(kernel_heap_metadata), heap_metadata);
+			ipc_struct_memory_write_response response;
+			recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
+			if (response.success == 0) {
+				//fixme manejar error
+				return;
+			}
 			free(heap_metadata);
-
 			list_add(kernel_page_assignments_list, assignment);
+			offset = 0 + sizeof(kernel_heap_metadata);
 		}
 
 		// Ya tengo la asignación indicada, ahora hay que obtener
@@ -665,7 +719,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
 		response.success = 1;
 		response.pageNumber = assignment->processPageNumber;
-		response.offset = 0; //fixme
+		response.offset = offset;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
 		break;

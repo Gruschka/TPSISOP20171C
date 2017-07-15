@@ -839,8 +839,9 @@ void *connection_handler(void *shit) {
 			log_debug(logger, "Content: %s", buffer);
 
 			char success = buffer != NULL ? 1 : 0;
+			int bufferSize = buffer != NULL ? request.size : sizeof(void *);
 
-			int totalSize = sizeof(ipc_header) + sizeof(char) + sizeof(int) + request.size;
+			int totalSize = sizeof(ipc_header) + sizeof(char) + sizeof(int) + bufferSize;
 			void *buf = malloc(totalSize);
 
 			ipc_header responseHeader;
@@ -848,8 +849,8 @@ void *connection_handler(void *shit) {
 
 			memcpy(buf, &responseHeader, sizeof(ipc_header));
 			memcpy(buf + sizeof(ipc_header), &success, sizeof(char));
-			memcpy(buf + sizeof(ipc_header) + sizeof(char), &(request.size), sizeof(int));
-			memcpy(buf + sizeof(ipc_header) + sizeof(char) + sizeof(int), buffer, request.size);
+			memcpy(buf + sizeof(ipc_header) + sizeof(char), &(bufferSize), sizeof(int));
+			memcpy(buf + sizeof(ipc_header) + sizeof(char) + sizeof(int), buffer, bufferSize);
 
 
 			send(sockfd, buf, totalSize, 0);
