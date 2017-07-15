@@ -348,13 +348,18 @@ typedef struct kernel_page_assignation {
     int32_t processID;
     int32_t processPageNumber;
     int32_t availableBytes;
-} kernel_page_assignation;
+} kernel_page_assignment;
 
-t_list *kernel_page_assignations_list;
+t_list *kernel_page_assignments_list;
+
+typedef struct kernel_heap_metadata  {
+	int32_t size;
+	char isFree;
+} kernel_heap_metadata;
 
 int main(int argc, char **argv) {
 	// CÓDIGO DEL FEDE BIEN XETO?
-	kernel_page_assignations_list = list_create();
+	kernel_page_assignments_list = list_create();
 	// TERMINA EL CÓDIGO DE FEDE BIEN XETO,
 
 	char *logFile = tmpnam(NULL);
@@ -576,6 +581,13 @@ void consolesServerSocket_handleDisconnection(int fd) {
 	// los finalizo y les pongo el exit code de desconexión
 }
 
+////// Heap
+
+kernel_heap_metadata *getKernelHeapMetadata(kernel_page_assignment *assignment, int32_t size) {
+	kernel_heap_metadata *metadata = malloc(sizeof(kernel_heap_metadata));
+	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, sizeof(kernel_heap_metadata), metada);
+}
+
 ///////////////////////////// CPUs server /////////////////////////////////
 void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
@@ -603,26 +615,56 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_alloc_heap *request = buffer;
 		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
 
-		int firstPageNumber = memory_sendRequestMorePages(request->processID, 1);
-		if (firstPageNumber == 0) {
-			ipc_struct_kernel_alloc_heap_response response;
-			response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
-			response.success = 0;
-			response.pageNumber = -1;
-			response.offset = -1;
-			send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+		kernel_page_assignment *assignment = NULL;
+
+		int i;
+		for (i = 0; i < list_size(kernel_page_assignments_list); i++) {
+			kernel_page_assignment *a = list_get(kernel_page_assignments_list, i);
+			if (a->processID == request->processID && a->availableBytes >= (request->numberOfBytes + sizeof(kernel_heap_metadata))) {
+				//FIXME: leer la memoria y analizar con los metadata
+				assignment = a;
+			}
 		}
 
-		kernel_page_assignation *page_assignation = malloc(sizeof(kernel_page_assignation));
-		page_assignation->processID = request->processID;
-		page_assignation->processPageNumber = firstPageNumber;
-		page_assignation->availableBytes = 200; //fixme
-		list_add(kernel_page_assignations_list, page_assignation);
+		if (assignment == NULL) {
+			// Si es NULL, entonces no queda ninguna página de heap
+			// para este proceso, que le queden disponibles X
+			// bytes contiguos disponibles para almacenar lo pedido.
+			// Entonces, se pide una nueva página a la memoria
+			int pageNumber = memory_sendRequestMorePages(request->processID, 1);
+			if (pageNumber == 0) {
+				// Error de la memoria: hago rethrows
+				ipc_struct_kernel_alloc_heap_response response;
+				response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
+				response.success = 0;
+				response.pageNumber = -1;
+				response.offset = -1;
+				send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+				return;
+			}
 
+			// El pedido fue exitoso, generamos un registro de la asignación
+			// y lo agregamos a la lista
+			assignment = malloc(sizeof(kernel_page_assignment));
+			assignment->processID = request->processID;
+			assignment->processPageNumber = pageNumber;
+			assignment->availableBytes = pageSize;
+
+			kernel_heap_metadata *heap_metadata = malloc(sizeof(kernel_heap_metadata));
+			heap_metadata->isFree = 1;
+			heap_metadata->size = pageSize - sizeof(kernel_heap_metadata);
+			ipc_client_sendMemoryWrite(memory_sockfd, request->processID, pageNumber, 0, sizeof(kernel_heap_metadata), heap_metadata);
+			free(heap_metadata);
+
+			list_add(kernel_page_assignments_list, assignment);
+		}
+
+		// Ya tengo la asignación indicada, ahora hay que obtener
+		// un bloque libre de dicha página
 		ipc_struct_kernel_alloc_heap_response response;
 		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
 		response.success = 1;
-		response.pageNumber = page_assignation->processPageNumber;
+		response.pageNumber = assignment->processPageNumber;
 		response.offset = 0; //fixme
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
