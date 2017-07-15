@@ -925,7 +925,9 @@ void *serverThread_main(void *mierda) {
 	struct sockaddr_in server, client;
 
 	//Create socket
+	int iSetOption = 1;
 	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+	setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption, sizeof(iSetOption));
 	if (socket_desc == -1) {
 		log_error(consoleLog, "No se pudo crear el socket");
 	}
