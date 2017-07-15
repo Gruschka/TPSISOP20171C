@@ -44,7 +44,9 @@ typedef enum {
 	KERNEL_SEMAPHORE_SIGNAL,
 	KERNEL_SEMAPHORE_SIGNAL_RESPONSE,
 	KERNEL_ALLOC_HEAP,
-	KERNEL_ALLOC_HEAP_RESPONSE
+	KERNEL_ALLOC_HEAP_RESPONSE,
+	KERNEL_DEALLOC_HEAP,
+	KERNEL_DEALLOC_HEAP_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -211,6 +213,18 @@ typedef struct kernel_alloc_heap_response {
 	int pageNumber;
 	int offset;
 } __attribute__((packed)) ipc_struct_kernel_alloc_heap_response;
+
+typedef struct kernel_dealloc_heap {
+	ipc_header header;
+	int processID;
+	int pageNumber;
+	int offset;
+} __attribute__((packed)) ipc_struct_kernel_dealloc_heap;
+
+typedef struct kernel_dealloc_heap_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_dealloc_heap_response;
 
 typedef struct cpu_execute_program {
 	ipc_header header;
