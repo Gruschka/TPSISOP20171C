@@ -115,6 +115,13 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				deserializedStructHandler(fd, signal->header.operationIdentifier, signal);
 				break;
 			}
+			case KERNEL_ALLOC_HEAP: {
+				ipc_struct_kernel_alloc_heap *alloc = malloc(sizeof(ipc_struct_kernel_alloc_heap));
+				recv(fd, alloc, sizeof(ipc_struct_kernel_alloc_heap), 0);
+
+				deserializedStructHandler(fd, alloc->header.operationIdentifier, alloc);
+				break;
+			}
 		default:
 			break;
 		}

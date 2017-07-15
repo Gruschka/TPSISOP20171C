@@ -571,7 +571,13 @@ void consolesServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 
 	// Si aca ya están finalizados no hago nada
+	int i;
 
+	for (i = 0; i < list_size(activeConsoles); i++) {
+		t_active_console *console = list_get(activeConsoles, i);
+
+		finishProgram(console->pid, -6);
+	}
 	// busco todos los pcbs para esa consola
 	// los finalizo y les pongo el exit code de desconexión
 }
@@ -834,4 +840,23 @@ t_PCB *createPCBFromScript(char *script) {
 	PCB->stackIndex = NULL;
 
 	return PCB;
+}
+
+void finishProgram(int pid, int exitCode) {
+	ipc_client_sendFinishProgram(memory_sockfd, pid);
+	t_PCB *pcb = NULL;
+
+	pthread_mutex_lock(&readyQueue_mutex);
+	pcb = list_takePCB(readyQueue, pid);
+	pthread_mutex_unlock(&readyQueue_mutex);
+	if (pcb != NULL) {
+		return;
+	}
+
+	pthread_mutex_lock(&execList_mutex);
+	pcb = list_takePCB(execList, pid);
+	pthread_mutex_unlock(&readyQueue_mutex);
+	if (pcb != NULL) {
+		return;
+	}
 }
