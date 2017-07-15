@@ -603,11 +603,25 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
 
 		int firstPageNumber = memory_sendRequestMorePages(request->processID, 1);
+		if (firstPageNumber == 0) {
+			ipc_struct_kernel_alloc_heap_response response;
+			response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
+			response.success = 0;
+			response.pageNumber = -1;
+			response.offset = -1;
+			end(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+		}
+
+		kernel_page_assignation *page_assignation = malloc(sizeof(kernel_page_assignation));
+		page_assignation->processID = request->processID;
+		page_assignation->processPageNumber = firstPageNumber;
+		page_assignation->availableBytes = 200;
+		list_add(kernel_page_assignations_list, page_assignation);
 
 		ipc_struct_kernel_alloc_heap_response response;
 		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
-		response.success = firstPageNumber == 0 ? 0 : 1;
-		response.pageNumber = firstPageNumber;
+		response.success = 1;
+		response.pageNumber = page_assignation->processPageNumber;
 		response.offset = 0; //fixme
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
