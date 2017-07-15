@@ -19,6 +19,7 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <signal.h>
 #include <netinet/in.h>
 
 #include "memory.h"
@@ -51,8 +52,18 @@ pthread_t configurationWatcherThread;
 
 uint32_t lastPID = 1;
 uint32_t pageSize = 256;
+uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
+
+//void sigintHandler(int sig_num)
+//{
+//    /* Reset handler to catch SIGINT next time.
+//       Refer http://en.cppreference.com/w/c/program/signal */
+//    signal(SIGINT, sigintHandler);
+//    printf("\n Cannot be terminated using Ctrl+C \n");
+//    fflush(stdout);
+//}
 
 void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier) {
 	log_debug(logger, "[semaphore: %s] Process<PID:%d> did block", identifier, pcb->pid);
@@ -184,7 +195,7 @@ int connectToMemory() {
 		return -1;
 	}
 
-	server = gethostbyname("127.0.0.1");
+	server = gethostbyname("10.0.1.143");
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	bcopy((char *) server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
@@ -210,17 +221,10 @@ int memory_sendInitProgram(int pid, int numberOfPages) {
 
 	send(memory_sockfd, &request, sizeof(request), 0);
 
-	ipc_header responseHeader;
-	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+	ipc_struct_memory_init_program_response response;
+	recv(memory_sockfd, &response, sizeof(ipc_struct_memory_init_program_response), 0);
 
-	if (responseHeader.operationIdentifier == MEMORY_INIT_PROGRAM_RESPONSE) {
-		char success;
-
-		recv(memory_sockfd, &success, sizeof(char), 0);
-		return (success != 0) ? 1 : -1;
-	}
-
-	return -1;
+	return (response.success != 0) ? 1 : -1;
 }
 
 int memory_sendRequestMorePages(int pid, int numberOfPages) {
@@ -443,6 +447,15 @@ void fetchConfiguration() {
 }
 
 ///////////////////////////// Consoles server /////////////////////////////////
+
+typedef struct kernel_page_assignation {
+    int32_t processID;
+    int32_t processPageNumber;
+    int32_t availableBytes;
+} kernel_page_assignation;
+
+//t_list *list = list_create()
+
 void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
@@ -450,7 +463,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_handshake *handshake = buffer;
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
-		ipc_server_sendHandshakeResponse(fd, 1);
+		ipc_server_sendHandshakeResponse(fd, 1, 0);
 		break;
 	}
 	case PROGRAM_START: {
@@ -464,7 +477,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		t_PCB *newProgram = createPCBFromScript(codeString);
 		newProgram->pid = ++lastPID;
 
-		int numberOfPages = newProgram->codePages;
+		int numberOfPages = newProgram->codePages + stackSize;
 		int pid = newProgram->pid;
 		int total = programStart->codeLength;
 
@@ -475,16 +488,19 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		}
 
 		int currentPage;
-		for (currentPage = 0; currentPage < numberOfPages; currentPage++) {
+		for (currentPage = 0; currentPage < newProgram->codePages; currentPage++) {
 			int size;
 
-			if (currentPage == numberOfPages - 1) { // si es la última página mando lo que falta
+			if (currentPage == newProgram->codePages - 1) { // la ultima pagina
 				size = total - (currentPage * pageSize);
 			} else {
 				size = pageSize;
 			}
 
 			ipc_client_sendMemoryWrite(memory_sockfd, pid, currentPage, 0, size, codeString + currentPage * pageSize);
+			ipc_struct_memory_write_response response;
+			recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
+			log_debug(logger, "ipc_struct_memory_write_response. success: %d", response.success);
 		}
 
 		ipc_sendStartProgramResponse(fd, newProgram->pid);
@@ -504,6 +520,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		if (pcb != NULL) {
 			removePCB(readyQueue, pcb);
 		}
+		// todo: revisar las otras listas
 		pthread_mutex_unlock(&readyQueue_mutex);
 		//TODO: enviarle a la memoria para liberar los recursos
 		break;
@@ -515,6 +532,20 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 
 void consolesServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
+}
+
+void markCPUAsFree(int fd) {
+	int i;
+	t_CPUx *cpu = NULL;
+
+	for (i = 0; i < list_size(cpusList); i++) {
+		cpu = list_get(cpusList, i);
+
+		if (cpu->fd == fd) {
+			cpu->isAvailable = true;
+			sem_post(&exec_spaces);
+		}
+	}
 }
 
 t_CPUx *getAvailableCPU() {
@@ -547,7 +578,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_handshake *handshake = buffer;
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
-		ipc_server_sendHandshakeResponse(fd, 1);
+		ipc_server_sendHandshakeResponse(fd, 1, 256);
 		break;
 	}
 	case GET_SHARED_VARIABLE: {
@@ -569,6 +600,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 	case KERNEL_SEMAPHORE_WAIT: {
 		ipc_struct_kernel_semaphore_wait *wait = buffer;
 		log_info(logger, "kernel_semaphore_wait. identifier: %s", wait->identifier);
+		t_PCB *waitPCB = wait->pcb;
 
 		kernel_semaphore *sem = getSemaphoreByIdentifier(wait->identifier);
 		ipc_struct_kernel_semaphore_wait_response response;
@@ -576,6 +608,14 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 		response.shouldBlock = kernel_semaphore_wait(sem, list_get(execList, 0)) == 0 ? 1 : 0;
 		send(fd, &response, sizeof(ipc_struct_kernel_semaphore_wait_response), 0);
+
+		if (response.shouldBlock == 1) {
+			pthread_mutex_lock(&execList_mutex);
+			markCPUAsFree(fd);
+			list_takePCB(execList, waitPCB->pid);
+			pthread_mutex_unlock(&execList_mutex);
+		}
+
 		break;
 	}
 	default:
@@ -660,7 +700,7 @@ void *dispatcher_mainFunction(void) {
 		t_PCB *program = readyQueue_popProcess();
 		t_CPUx *availableCPU = getAvailableCPU();
 		execList_addProcess(program);
-		sendExecutePCB(availableCPU->fd, program, 5); //TODO: Mandar el quantum correcto
+		sendExecutePCB(availableCPU->fd, program, configuration->schedulingAlgorithm == ROUND_ROBIN ? configuration->quantum : -1);
 		log_debug(logger,
 				"[dispatcher] sent process <PID:%d> to CPU <FD:%d>. pcbSize: %d",
 				program->pid, availableCPU->fd, pcb_getPCBSize(program));

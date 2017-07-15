@@ -26,7 +26,7 @@ ipc_struct_memory_read_response *ipc_client_waitMemoryReadResponse(int fd);
 
 // Server
 int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandler, EpollDisconnectionEventHandler disconnectionHandler, EpollDeserializedStructEventHandler deserializedStructHandler);
-void ipc_server_sendHandshakeResponse(int fd, char success);
+void ipc_server_sendHandshakeResponse(int fd, char success, uint32_t info);
 void ipc_sendStartProgramResponse(int fd, uint32_t pid);
 
 
