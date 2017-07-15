@@ -455,6 +455,49 @@ ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_ker
 
 }
 
+ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
+	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_open_file request;
+
+	request.header.operationIdentifier = KERNEL_OPEN_FILE;
+	request.creation = flags.creation;
+	request.read = flags.read;
+	request.write = flags.write;
+	request.pathLength = strlen(path)+1;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pathLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	char *pathCopy = strdup(path);
+	memcpy(buffer+bufferOffset,pathCopy,request.pathLength);
+	bufferOffset += request.pathLength;
+	free(pathCopy);
+
+	memcpy(buffer+bufferOffset,&request.read,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.write,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.creation,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_open_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
+
+	return response;
+
+}
+
 void cpu_kernelWait(char *semaphoreId){
 	printf("kernelWait\n");
 	fflush(stdout);
