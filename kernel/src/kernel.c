@@ -680,7 +680,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			// bytes contiguos disponibles para almacenar lo pedido.
 			// Entonces, se pide una nueva página a la memoria
 			int pageNumber = memory_sendRequestMorePages(request->processID, 1);
-			if (pageNumber == 0) {
+			if (pageNumber == -1) {
 				// Error de la memoria: hago rethrows
 				ipc_struct_kernel_alloc_heap_response response;
 				response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
@@ -713,8 +713,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			offset = 0 + sizeof(kernel_heap_metadata);
 		}
 
-		// Ya tengo la asignación indicada, ahora hay que obtener
-		// un bloque libre de dicha página
+		// Ya tengo la asignación indicada y un offset
 		ipc_struct_kernel_alloc_heap_response response;
 		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
 		response.success = 1;
