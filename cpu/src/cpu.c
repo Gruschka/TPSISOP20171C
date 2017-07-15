@@ -457,27 +457,38 @@ ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_ker
 	return response;
 
 }
-ipc_struct_kernel_free_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
-	int bufferSize = sizeof(ipc_struct_kernel_free_heap);
+ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
+	int bufferSize = sizeof(ipc_struct_kernel_dealloc_heap);
 	int bufferOffset = 0;
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
 
-	ipc_struct_kernel_free_heap request;
+	ipc_struct_kernel_dealloc_heap request;
 
-	request.header.operationIdentifier = KERNEL_FREE_HEAP;
-	request.pointer = pointer;
+	request.header.operationIdentifier = KERNEL_DEALLOC_HEAP;
+	request.processID = myCPU.assignedPCB->pid;
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(pointer,&variable);
+	request.pageNumber = variable.page;
+	request.offset = variable.offset;
+
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
 
-	memcpy(buffer+bufferOffset,&request.pointer,sizeof(uint32_t));
-	bufferOffset += sizeof(uint32_t);
+	memcpy(buffer+bufferOffset,&request.processID,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.pageNumber,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.offset,sizeof(int));
+	bufferOffset += sizeof(int);
 
 	send(fd, buffer, bufferSize, 0);
 
-	ipc_struct_kernel_free_heap_response response;
-	recv(fd, &response, sizeof(ipc_struct_kernel_free_heap_response), 0);
+	ipc_struct_kernel_dealloc_heap_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_dealloc_heap_response), 0);
 
 	return response;
 
@@ -700,7 +711,7 @@ uint32_t cpu_kernelAlloc(int size){
 }
 void cpu_kernelFree(uint32_t pointer){
 	printf("kernelFree\n");
-	ipc_struct_kernel_free_heap_response response = ipc_sendKernelFree(myCPU.connections[T_KERNEL].socketFileDescriptor,pointer);
+	ipc_struct_kernel_dealloc_heap_response response = ipc_sendKernelFree(myCPU.connections[T_KERNEL].socketFileDescriptor,pointer);
 	fflush(stdout);
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
