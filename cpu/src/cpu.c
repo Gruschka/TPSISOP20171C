@@ -184,7 +184,7 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 //			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
 			   free(response);
 			   memoryConnection->status = CONNECTED;
-			   aCPU->connections[T_MEMORY].isDummy = 1;
+			   aCPU->connections[T_MEMORY].isDummy = 0;
 			   printf("CONNECTED TO Memory");
 			break;
 		default:
@@ -519,8 +519,8 @@ int main() {
 	cpu_start(&myCPU);
 
 	// connect to memory -- DUMMY
-	cpu_connect(&myCPU,T_D_MEMORY);
-	cpu_connect(&myCPU,T_D_KERNEL);
+	cpu_connect(&myCPU,T_MEMORY);
+	cpu_connect(&myCPU,T_KERNEL);
 
 
 	while (1) {

@@ -79,10 +79,6 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				char *identifier = malloc(identifierLength);
 				recv(fd, identifier, identifierLength, 0);
 
-				int serializedLength;
-				recv(fd, &serializedLength, sizeof(int), 0);
-
-
 				t_PCBVariableSize variableSize;
 				recv(fd, &variableSize, sizeof(t_PCBVariableSize), MSG_PEEK);
 
@@ -90,12 +86,10 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				void *pcbBuffer = malloc(bufferSize);
 				recv(fd, pcbBuffer, bufferSize, 0);
 
-
 				ipc_struct_kernel_semaphore_wait *semaphoreWait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
 				semaphoreWait->header = header;
 				semaphoreWait->identifierLength = identifierLength;
 				semaphoreWait->identifier = identifier;
-				semaphoreWait->serializedLength = serializedLength;
 				semaphoreWait->pcb = pcb_deSerializePCB(pcbBuffer, &variableSize);
 
 				deserializedStructHandler(fd, semaphoreWait->header.operationIdentifier, semaphoreWait);
@@ -121,11 +115,12 @@ void ipc_client_sendHandshake(ipc_processIdentifier processIdentifier, int fd) {
 	free(handshake);
 }
 
-void ipc_server_sendHandshakeResponse(int fd, char success) {
+void ipc_server_sendHandshakeResponse(int fd, char success, uint32_t info) {
 	ipc_struct_handshake_response *response = malloc(sizeof(ipc_struct_handshake_response));
 
 	response->header.operationIdentifier = HANDSHAKE_RESPONSE;
 	response->success = success;
+	response->info = info;
 
 	send(fd, response, sizeof(ipc_struct_handshake_response), 0);
 	free(response);

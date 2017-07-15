@@ -19,6 +19,7 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <signal.h>
 #include <netinet/in.h>
 
 #include "memory.h"
@@ -54,6 +55,15 @@ uint32_t pageSize = 256;
 uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
+
+//void sigintHandler(int sig_num)
+//{
+//    /* Reset handler to catch SIGINT next time.
+//       Refer http://en.cppreference.com/w/c/program/signal */
+//    signal(SIGINT, sigintHandler);
+//    printf("\n Cannot be terminated using Ctrl+C \n");
+//    fflush(stdout);
+//}
 
 void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier) {
 	log_debug(logger, "[semaphore: %s] Process<PID:%d> did block", identifier, pcb->pid);
@@ -185,7 +195,7 @@ int connectToMemory() {
 		return -1;
 	}
 
-	server = gethostbyname("127.0.0.1");
+	server = gethostbyname("10.0.1.143");
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	bcopy((char *) server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
@@ -211,17 +221,10 @@ int memory_sendInitProgram(int pid, int numberOfPages) {
 
 	send(memory_sockfd, &request, sizeof(request), 0);
 
-	ipc_header responseHeader;
-	recv(memory_sockfd, &responseHeader, sizeof(ipc_header), 0);
+	ipc_struct_memory_init_program_response response;
+	recv(memory_sockfd, &response, sizeof(ipc_struct_memory_init_program_response), 0);
 
-	if (responseHeader.operationIdentifier == MEMORY_INIT_PROGRAM_RESPONSE) {
-		char success;
-
-		recv(memory_sockfd, &success, sizeof(char), 0);
-		return (success != 0) ? 1 : -1;
-	}
-
-	return -1;
+	return (response.success != 0) ? 1 : -1;
 }
 
 int memory_sendRequestMorePages(int pid, int numberOfPages) {
@@ -460,7 +463,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_handshake *handshake = buffer;
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
-		ipc_server_sendHandshakeResponse(fd, 1);
+		ipc_server_sendHandshakeResponse(fd, 1, 0);
 		break;
 	}
 	case PROGRAM_START: {
@@ -495,6 +498,9 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 			}
 
 			ipc_client_sendMemoryWrite(memory_sockfd, pid, currentPage, 0, size, codeString + currentPage * pageSize);
+			ipc_struct_memory_write_response response;
+			recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
+			log_debug(logger, "ipc_struct_memory_write_response. success: %d", response.success);
 		}
 
 		ipc_sendStartProgramResponse(fd, newProgram->pid);
@@ -528,6 +534,20 @@ void consolesServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 }
 
+void markCPUAsFree(int fd) {
+	int i;
+	t_CPUx *cpu = NULL;
+
+	for (i = 0; i < list_size(cpusList); i++) {
+		cpu = list_get(cpusList, i);
+
+		if (cpu->fd == fd) {
+			cpu->isAvailable = true;
+			sem_post(&exec_spaces);
+		}
+	}
+}
+
 t_CPUx *getAvailableCPU() {
 	int i;
 	t_CPUx *cpu = NULL;
@@ -558,7 +578,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_handshake *handshake = buffer;
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
-		ipc_server_sendHandshakeResponse(fd, 1);
+		ipc_server_sendHandshakeResponse(fd, 1, 256);
 		break;
 	}
 	case GET_SHARED_VARIABLE: {
@@ -591,10 +611,8 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 		if (response.shouldBlock == 1) {
 			pthread_mutex_lock(&execList_mutex);
-			pthread_mutex_lock(&blockQueue_mutex);
-			t_PCB *processToBeBlocked = list_takePCB(execList, waitPCB->pid);
-			blockQueue_addProcess(processToBeBlocked);
-			pthread_mutex_unlock(&blockQueue_mutex);
+			markCPUAsFree(fd);
+			list_takePCB(execList, waitPCB->pid);
 			pthread_mutex_unlock(&execList_mutex);
 		}
 
