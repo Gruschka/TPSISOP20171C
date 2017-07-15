@@ -741,15 +741,17 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
 
 	if(fs_validateFile(fileName)){ //If the path is invalid
 			log_error(logger, "Invalid path - Can not write file");
-			return -1;
+			return 'f';
 	}
 
 	error = fseek(blockFilePointer, offset, SEEK_SET);
 
-	if(error == -1){
+
+	if (strlen(blockFilePointer) == 0) {
 		log_error(logger, "Error while seeking offset on READ FILE operation (No bytes read - possible sparse file)");
-		return -1;
+		return 'f';
 	}
+
 
 	fflush(stdin);
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
@@ -758,7 +760,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
 
 	if(error == NULL){
 		log_error(logger, "Error while reading on READ FILE operation");
-		return -1;
+		return 'f';
 	}
 
 	printf("Reading %d bytes with %d offset from block %d : %s \n", strlen(readValues),offset,blockNumberToRead, readValues);
@@ -818,6 +820,8 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 
 		if(bytesRemainingToRead > bytesUntilEndOfBlock){ //Si tiene que leer mas de un bloque
 			buffer = fs_readBlockFile(currentBlock, readOffset, bytesUntilEndOfBlock); //Lee hasta fin de bloque
+			if(buffer == 'f') return -1; //fails
+
 			memcpy(readValues+offsetBuffer, buffer, bytesUntilEndOfBlock);
 			bytesRemainingToRead -= bytesUntilEndOfBlock; //Resta los bytes que leyo
 			// jump to next block
@@ -829,6 +833,8 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 
 		}else{ //Si tiene que terminar de leer los bytes restantes en el currentblock
 			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockIndex], readOffset, bytesRemainingToRead);
+			if(buffer == 'f') return -1; //fails
+
 			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead);
 			bytesRemainingToRead = 0;
 			offsetBuffer += strlen(buffer);
@@ -901,21 +907,25 @@ int main(int argc, char **argv) {
 	//fs_dump();
 
 	char *bafer = string_new();
-	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
 
-
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
+	string_append(&bafer,"c");
+    fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288,strlen(bafer),bafer);
 
 
 	fs_dump();
-
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 129);
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64, 65);
+
+
+
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288, 1);
+	 /*fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64, 65);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 75);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",123123, 10);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 12312312);
 	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,66);
-
+*/
 
 	/*fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_dump();
