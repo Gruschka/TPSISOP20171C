@@ -451,6 +451,8 @@ typedef struct kernel_page_assignation {
     int32_t availableBytes;
 } kernel_page_assignation;
 
+t_list *list = list_create()
+
 void consolesServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
