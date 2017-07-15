@@ -107,7 +107,7 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "10.0.1.143";
+	CPU->connections[T_MEMORY].host = "10.0.1.144";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -333,10 +333,13 @@ void cpu_callNoReturn(char *label){
 }
 void cpu_callWithReturn(char *label, uint32_t returnAddress){
 	t_stackIndexRecord *record = malloc(sizeof(t_stackIndexRecord));
-
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(returnAddress,&variable);
 
 	record->returnPosition = myCPU.instructionPointer;
-	record->returnVariable = cpu_getMemoryDirectionFromAddress(returnAddress);
+	record->returnVariable.offset = variable.offset;
+	record->returnVariable.page = variable.page;
+	record->returnVariable.size = sizeof(int);
 
 	myCPU.instructionPointer = pcb_getDirectionFromLabel(myCPU.assignedPCB,label) - 1;
 
@@ -705,6 +708,7 @@ uint32_t cpu_kernelOpen(char *address, t_flags flags){
 	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor,address,flags);
 
 	fflush(stdout);
+	return response.fileDescriptor;
 }
 void cpu_kernelDelete(uint32_t fileDescriptor){
 	printf("kernelDelete\n");
@@ -725,10 +729,11 @@ void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position){
 void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
 	char *output = malloc(size);
 	memcpy(output,buffer,size);
+	printf("kernelWrite\n",output);
 	printf("%s\n",output);
 	fflush(stdout);
 	free(output);
-	ipc_struct_kernel_write_file_response response = ipc_sendKernelWriteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,buffer,size);
+	ipc_struct_kernel_write_file_response response = ipc_sendKernelWriteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,size,buffer);
 }
 void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size){
 	printf("kernelRead\n");
