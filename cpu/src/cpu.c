@@ -73,12 +73,12 @@ t_log *logger;
 void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size){
 	void *buffer = malloc(size);
 
-	memcpy(buffer,myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,size);
+	memcpy(buffer,myMemory+(page*myCPU.pageSize)+offset,size);
 
 	return buffer;
 }
 uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer){
-	memcpy(myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,buffer,size);
+	memcpy(myMemory+(page*myCPU.pageSize)+offset,buffer,size);
 }
 void *cpu_readMemory(int pid, int page, int offset, int size) {
 	if(myCPU.connections[T_MEMORY].isDummy) return cpu_readMemoryDummy(pid,page,offset,size);
@@ -197,6 +197,7 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 
 			   ipc_client_sendHandshake(CPU, memoryConnection->socketFileDescriptor);
 			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
+			   myCPU.pageSize = response->info;
 			   free(response);
 			   memoryConnection->status = CONNECTED;
 			   aCPU->connections[T_MEMORY].isDummy = 0;
@@ -215,7 +216,7 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	int programLength = string_length(script);
 	t_metadata_program *program = metadata_desde_literal(script);
 
-	int codePagesCount = programLength / DUMMY_MEMORY_PAGE_SIZE;
+	int codePagesCount = programLength / myCPU.pageSize;
 	int instructionCount = program->instrucciones_size;
 
 	PCB->variableSize.stackArgumentCount = 0;
@@ -236,7 +237,7 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	PCB->filesTable = NULL;
 	PCB->pc = 0;
 	PCB->pid = rand();
-	PCB->sp = PCB->codePages +1 * DUMMY_MEMORY_PAGE_SIZE;
+	PCB->sp = PCB->codePages +1 * myCPU.pageSize;
 	PCB->stackIndex = NULL;
 
 	return PCB;
@@ -245,7 +246,7 @@ uint32_t cpu_declareVariable(char variableName){
 //	printf("declareVariable\n");
 	t_variableAdd type = pcb_getVariableAddTypeFromTag(variableName);
 	t_stackVariable *variable = malloc(sizeof(t_stackVariable));
-	int dataBasePage = myCPU.assignedPCB->codePages +1;
+	int dataBasePage = myCPU.assignedPCB->codePages;
 	t_PCBVariableSize *variableSize = &myCPU.assignedPCB->variableSize;
 	int currentVariableSpaceInMemory = (variableSize->stackVariableCount + variableSize->stackArgumentCount) * sizeof(int);
 	int currentVariablePagesInMemory = 0;
@@ -255,9 +256,9 @@ uint32_t cpu_declareVariable(char variableName){
 	variable->id = variableName;
 	variable->page = dataBasePage;
 	if(currentVariableSpaceInMemory != 0){
-		currentVariablePagesInMemory = currentVariableSpaceInMemory / DUMMY_MEMORY_PAGE_SIZE;
+		currentVariablePagesInMemory = currentVariableSpaceInMemory / myCPU.pageSize;
 		variable->page += currentVariablePagesInMemory;
-		variable->offset = currentVariableSpaceInMemory - (currentVariablePagesInMemory * DUMMY_MEMORY_PAGE_SIZE);
+		variable->offset = currentVariableSpaceInMemory - (currentVariablePagesInMemory * myCPU.pageSize);
 	}else{
 		variable->offset = currentVariableSpaceInMemory;
 	}
@@ -281,20 +282,24 @@ uint32_t cpu_getVariablePosition(char variableName){
 
 	t_stackVariable *variable = pcb_getVariable(myCPU.assignedPCB,variableName);
 
-	int position = (variable->page * DUMMY_MEMORY_PAGE_SIZE) + variable->offset;
-	return position;
+
+	return cpu_getPointerFromVariableReference(*variable);
 }
 int cpu_dereference(uint32_t variableAddress){
 	//rintf("dereference\n");
-	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int));
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(variableAddress,&variable);
+	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int));
 	int value = *valueBuffer;
 	free(valueBuffer);
 	return value;
 }
 void cpu_assignValue(uint32_t variableAddress, int value){
 	//printf("assignValue\n");
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(variableAddress,&variable);
 	int valueBuffer = value;
-	cpu_writeMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int),&valueBuffer);
+	cpu_writeMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int),&valueBuffer);
 }
 void cpu_gotoLabel(char *label){
 	printf("gotoLabel\n");
@@ -398,6 +403,13 @@ ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *id
 	return response;
 }
 
+ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreSignal(int fd, char *identifier){
+	ipc_struct_kernel_semaphore_wait *wait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
+	wait->header.operationIdentifier = KERNEL_SEMAPHORE_WAIT;
+	wait->identifierLength = strlen(identifier)+1;
+	wait->identifier = malloc(strlen(identifier) + 1);
+}
+
 void cpu_kernelWait(char *semaphoreId){
 	printf("kernelWait\n");
 	fflush(stdout);
@@ -447,8 +459,8 @@ void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size){
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
 	t_memoryDirection direction;
 
-	direction.page = address / DUMMY_MEMORY_PAGE_SIZE;
-	direction.offset = address - (direction.page * DUMMY_MEMORY_PAGE_SIZE);
+	direction.page = address / myCPU.pageSize;
+	direction.offset = address - (direction.page * myCPU.pageSize);
 	direction.size = sizeof(int);
 
 	return direction;
@@ -500,6 +512,13 @@ int cpu_receivePCB(){
 	return 0;
 }
 
+void cpu_getVariableReferenceFromPointer(uint32_t pointer, t_stackVariable *variable){
+	variable->offset = (uint16_t) pointer;
+	variable->page = pointer >> 16;
+}
+uint32_t cpu_getPointerFromVariableReference(t_stackVariable variable){
+	return ((uint16_t) variable.page << 16) | variable.offset;
+}
 
 
  AnSISOP_funciones functions = {
@@ -540,7 +559,6 @@ int main() {
 	cpu_connect(&myCPU,T_MEMORY);
 	cpu_connect(&myCPU,T_KERNEL);
 
-
 	while (1) {
 		myCPU.status = WAITING;
 
@@ -550,8 +568,8 @@ int main() {
 		while(myCPU.status == RUNNING && myCPU.quantum > 0){
 			   //cpu fetch
 			   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
-			   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
-			   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
+			   int page = currentInstructionIndex.start / myCPU.pageSize;
+			   int offset = currentInstructionIndex.start - (page * myCPU.pageSize);
 
 			   char *instruction = cpu_readMemory(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
 			   instruction[currentInstructionIndex.size-1]='\0';
