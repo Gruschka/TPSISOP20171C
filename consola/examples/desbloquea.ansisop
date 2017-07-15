@@ -1,0 +1,5 @@
+#!/usr/bin/ansisop
+begin	
+	signal mutexA
+	
+end
