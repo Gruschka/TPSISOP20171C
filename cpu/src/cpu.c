@@ -454,7 +454,31 @@ ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_ker
 	return response;
 
 }
+ipc_struct_kernel_free_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
+	int bufferSize = sizeof(ipc_struct_kernel_free_heap);
+	int bufferOffset = 0;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
 
+	ipc_struct_kernel_free_heap request;
+
+	request.header.operationIdentifier = KERNEL_FREE_HEAP;
+	request.pointer = pointer;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pointer,sizeof(uint32_t));
+	bufferOffset += sizeof(uint32_t);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_free_heap_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_free_heap_response), 0);
+
+	return response;
+
+}
 ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
 	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1;
 	char *buffer = malloc(bufferSize);
@@ -492,7 +516,155 @@ ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, 
 	send(fd, buffer, bufferSize, 0);
 
 	ipc_struct_kernel_open_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_delete_file_response ipc_sendKernelDeleteFile(int fd, int fileDescriptor){
+	int bufferSize = sizeof(ipc_struct_kernel_delete_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_delete_file request;
+
+	request.header.operationIdentifier = KERNEL_DELETE_FILE;
+	request.fileDescriptor = fileDescriptor;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_delete_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_delete_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_close_file_response ipc_sendKernelCloseFile(int fd, int fileDescriptor){
+	int bufferSize = sizeof(ipc_struct_kernel_close_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_close_file request;
+
+	request.header.operationIdentifier = KERNEL_CLOSE_FILE;
+	request.fileDescriptor = fileDescriptor;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_close_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_close_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd, int fileDescriptor, int position){
+	int bufferSize = sizeof(ipc_struct_kernel_move_file_cursor);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_move_file_cursor request;
+
+	request.header.operationIdentifier = KERNEL_MOVE_FILE_CURSOR;
+	request.fileDescriptor = fileDescriptor;
+	request.position = position;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.position,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_move_file_cursor_response response;
 	recv(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDescriptor, int size, char *content){
+	int bufferSize = sizeof(ipc_struct_kernel_write_file) + strlen(content) +1;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_write_file request;
+
+	request.header.operationIdentifier = KERNEL_WRITE_FILE;
+	request.fileDescriptor = fileDescriptor;
+	request.size = size;
+	request.buffer = strdup(content);
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.buffer,strlen(content)+1);
+	bufferOffset += strlen(content)+1;
+	free(request.buffer);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_write_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDescriptor, uint32_t valuePointer, int size){
+	int bufferSize = sizeof(ipc_struct_kernel_read_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_read_file request;
+
+	request.header.operationIdentifier = KERNEL_READ_FILE;
+	request.fileDescriptor = fileDescriptor;
+	request.size = size;
+	request.valuePointer = valuePointer;
+
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.valuePointer,sizeof(uint32_t));
+	bufferOffset += sizeof(uint32_t);
+
+	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
+	bufferOffset += sizeof(int);
+
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_read_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_read_file_response), 0);
 
 	return response;
 
@@ -525,22 +697,29 @@ uint32_t cpu_kernelAlloc(int size){
 }
 void cpu_kernelFree(uint32_t pointer){
 	printf("kernelFree\n");
+	ipc_struct_kernel_free_heap_response response = ipc_sendKernelFree(myCPU.connections[T_KERNEL].socketFileDescriptor,pointer);
 	fflush(stdout);
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
 	printf("kernelOpen\n");
+	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor,address,flags);
+
 	fflush(stdout);
 }
 void cpu_kernelDelete(uint32_t fileDescriptor){
 	printf("kernelDelete\n");
+	ipc_struct_kernel_delete_file_response response = ipc_sendKernelDeleteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
+
 	fflush(stdout);
 }
 void cpu_kernelClose(uint32_t fileDescriptor){
 	printf("kernelClose\n");
+	ipc_struct_kernel_close_file_response response = ipc_sendKernelCloseFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
 	fflush(stdout);
 }
 void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position){
 	printf("kernelMoveCursor\n");
+	ipc_struct_kernel_move_file_cursor_response response = ipc_sendKernelMoveFileCursor(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,position);
 	fflush(stdout);
 }
 void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
@@ -549,9 +728,11 @@ void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
 	printf("%s\n",output);
 	fflush(stdout);
 	free(output);
+	ipc_struct_kernel_write_file_response response = ipc_sendKernelWriteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,buffer,size);
 }
 void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size){
 	printf("kernelRead\n");
+	ipc_struct_kernel_read_file_response response = ipc_sendKernelReadFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,value,size);
 	fflush(stdout);
 }
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
