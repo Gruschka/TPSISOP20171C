@@ -403,11 +403,34 @@ ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *id
 	return response;
 }
 
-ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreSignal(int fd, char *identifier){
-	ipc_struct_kernel_semaphore_wait *wait = malloc(sizeof(ipc_struct_kernel_semaphore_wait));
-	wait->header.operationIdentifier = KERNEL_SEMAPHORE_WAIT;
-	wait->identifierLength = strlen(identifier)+1;
-	wait->identifier = malloc(strlen(identifier) + 1);
+ipc_struct_kernel_semaphore_signal ipc_sendSemaphoreSignal(int fd, char *identifier){
+	ipc_struct_kernel_semaphore_signal*signal = malloc(sizeof(ipc_struct_kernel_semaphore_signal));
+	char * identifierCopy = strdup(identifier);
+
+	signal->header.operationIdentifier = KERNEL_SEMAPHORE_SIGNAL;
+	signal->identifierLength = strlen(identifier)+1;
+	signal->identifier = malloc(strlen(identifier) + 1);
+	memcpy(signal->identifier, identifier, strlen(identifier) + 1);
+
+	int bufferSize = 0;
+	int bufferOffset = 0;
+	bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(identifier)+1;
+	char *buffer = malloc(bufferSize);
+
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&signal->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&signal->identifierLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,identifierCopy,strlen(identifier)+1);
+	bufferOffset += strlen(identifier)+1;
+
+	send(fd, buffer, bufferSize, 0);
+
+	return *signal;
 }
 
 void cpu_kernelWait(char *semaphoreId){
@@ -415,10 +438,11 @@ void cpu_kernelWait(char *semaphoreId){
 	fflush(stdout);
 	myCPU.assignedPCB->pc = myCPU.instructionPointer;
 	ipc_struct_kernel_semaphore_wait_response response = ipc_sendSemaphoreWait(myCPU.connections[T_KERNEL].socketFileDescriptor, semaphoreId);
-	myCPU.status = WAITING;
+	if(response.shouldBlock == 1) myCPU.status = WAITING;
 }
 void cpu_kernelSignal(char *semaphoreId){
 	printf("kernelSignal\n");
+	ipc_struct_kernel_semaphore_signal response = ipc_sendSemaphoreSignal(myCPU.connections[T_KERNEL].socketFileDescriptor, semaphoreId);
 	fflush(stdout);
 }
 uint32_t cpu_kernelAlloc(int size){
@@ -584,36 +608,6 @@ int main() {
 			   myCPU.instructionPointer++;
 		   }
 	}
-
-
-
-
-   //generate PCB
-//   t_PCB *dummyPCB = cpu_createPCBFromScript(testProgram);
-//
-//   void *serializedPCB = pcb_serializePCB(dummyPCB);
-//
-//   pcb_destroy(dummyPCB);
-//
-//   t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
-//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableInfo, sizeof(t_PCBVariableSize), 0);
-//
-//   uint32_t size = pcb_getBufferSizeFromVariableSize(variableInfo);
-//
-//   void *bafer = malloc(size);
-//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, bafer, size, 0);
-////   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
-////
-////   // PCB received
-//   t_PCB *newPCB = pcb_deSerializePCB(bafer, variableInfo);
-//
-//   pcb_dump(newPCB);
-//
-//
-
-
-   //instruction cycle
-
 
 
 	return EXIT_SUCCESS;
