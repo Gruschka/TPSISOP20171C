@@ -77,6 +77,7 @@ void semaphoreDidWakeProcess(t_PCB *pcb, char *identifier) {
 	pthread_mutex_lock(&readyQueue_mutex);
 	t_PCB *awakenPCB = blockQueue_popProcess(pcb->pid);
 	readyQueue_addProcess(awakenPCB);
+	sem_post(&readyQueue_programsCount);
 	log_debug(logger, "[semaphores: %s] Process<PID:%d> did wake up", identifier, pcb->pid);
 	pthread_mutex_unlock(&readyQueue_mutex);
 	pthread_mutex_unlock(&blockQueue_mutex);
