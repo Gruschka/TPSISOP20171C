@@ -81,7 +81,9 @@ int fs_loadConfig(t_FS *FS){ //Llena la estructura del FS segun el archivo confi
 	FS->metadata.magicNumber = "SADICA";
 	return 0;
 }
-int fs_mount(t_FS *FS){  //Crea el mount path
+int fs_mount(t_FS *FS){  //Crea el mount path y toda la estructura del FS
+
+	//Directorio base
 	DIR *mountDirectory = opendir(myFS.mountDirectoryPath);
 
 	//check if mount path exists then open
@@ -100,8 +102,10 @@ int fs_mount(t_FS *FS){  //Crea el mount path
 	log_debug(logger,"found FS mount path");
 	closedir(mountDirectory);
 
+	//Crea (o abre si ya existe) la metadata del FileSystem
 	fs_openOrCreateMetadata(&myFS);
 
+	//Crea directorio de archivos
 	DIR *filesDirectory;
 	log_debug(logger,"looking for file directory %s", FS->filesDirectoryPath);
 	filesDirectory = opendir(FS->filesDirectoryPath);
@@ -119,6 +123,7 @@ int fs_mount(t_FS *FS){  //Crea el mount path
 	log_debug(logger,"found file directory %s", FS->filesDirectoryPath);
 	closedir(filesDirectory);
 
+	//Crea directorio de datos (bloques)
 	DIR *dataDirectory;
 	log_debug(logger,"looking for blocks directory %s", FS->dataDirectoryPath);
 	dataDirectory = opendir(FS->dataDirectoryPath);
@@ -168,10 +173,12 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 	t_FSMetadata checkMetadata;
 
 	log_debug(logger,"Looking for metadata file");
-	if(metadataFileDescriptor = fopen(FS->FSMetadataFileName,"r+")){
+
+	//Intenta abrir
+	if(metadataFileDescriptor = fopen(FS->FSMetadataFileName,"r+")){ //Existe el archivo de metadata
 		log_debug(logger,"found metadata file, checking FS parameters");
-		checkMetadata = fs_getFSMetadataFromFile(metadataFileDescriptor);
-		if(checkMetadata.blockAmount == blockAmount && checkMetadata.blockSize == blockSize){
+		checkMetadata = fs_getFSMetadataFromFile(metadataFileDescriptor); //Toma la metadata de dicho archivo;
+		if(checkMetadata.blockAmount == blockAmount && checkMetadata.blockSize == blockSize){ //Compara si los parametros de metadata matchean
 			log_debug(logger,"metadata parameters match");
 			fclose(metadataFileDescriptor);
 		}else{
@@ -180,7 +187,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 			return EXIT_FAILURE;
 		}
 
-	}else{
+	}else{ //No puede abrirlo => Lo crea
 		log_debug(logger,"metadata file not found creating with parameters");
 		metadataFileDescriptor = fopen(FS->FSMetadataFileName,"w+");
 		memset(buffer,0,50);
@@ -198,7 +205,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 		fclose(metadataFileDescriptor);
 	}
 	log_debug(logger,"looking for bitmap file");
-	if(bitmapFileDescriptor = fopen(FS->bitmapFileName,"rb+")){
+	if(bitmapFileDescriptor = fopen(FS->bitmapFileName,"rb+")){ //Abre bitmap
 
 		fclose(bitmapFileDescriptor);
 
@@ -208,14 +215,16 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount, char 
 		struct stat fileStats;
 		fstat(FS->bitmapFileDescriptor, &fileStats);
 
+		//Mappea el bitmap a memoria para que se actualice automaticamente al modificar la memoria
 		char* mapPointer = mmap(0,fileStats.st_size, PROT_WRITE, MAP_SHARED, FS->bitmapFileDescriptor, 0);
 
+		//Actualiza el bitarray pasando el puntero que devuelve el map
 		FS->bitmap = bitarray_create_with_mode(mapPointer, FS->metadata.blockAmount/8, LSB_FIRST);
 
 		log_debug(logger,"opened bitmap from disk");
 
 
-	}else{
+	}else{ //Si no pudo abrir bit map (no lo encuentra) lo crea
 		log_debug(logger,"bitmap file not found creating with parameters");
 		bitmapFileDescriptor = fopen(FS->bitmapFileName,"wb+");
 		chmod(FS->bitmapFileName,511);
@@ -322,7 +331,7 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 				free(stringArray);
 			}
 
-			//String array guarda los bloques sin corchetes, y se va alocando segun lo que tenga linebuffer + leido acumulado
+			//String array guarda los bloques sin corchetes, y se va alocando segun lo que tenga linebuffer + leido acumulado (realloc casero)
 			stringArray = malloc(strlen(lineBuffer) + stringArrayOffset);
 			memset(stringArray,0,strlen(lineBuffer) + stringArrayOffset);
 			if(!firstLine) memcpy(stringArray,temporalBuffer,stringArrayOffset);
@@ -335,9 +344,9 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer){
 		}
 
 
-		strtok_r(stringArray,"]",&metadataBlocksBuffer);
+		strtok_r(stringArray,"]",&metadataBlocksBuffer); //Queda un string con los bloques sin los corchetes
 
-		output.blocks =fs_getArrayFromString(&stringArray,blockCount);
+		output.blocks =fs_getArrayFromString(&stringArray,blockCount); //Convierte string a array
 
 		if(output.blocks == -1){
 
@@ -368,14 +377,17 @@ int fs_createFile(char *path){ //Crea archivo nuevo
 	char bloques[50];
 	memset(bloques,0,50);
 
-	if(fs_validateFile(path)){
+	if(fs_validateFile(path)){ //Si el archivo no existe
 		newFileDescriptor = fopen(path,"w+"); //Crea archivo Metadata del archivo nuevo
 		firstFreeBlock = fs_getFirstFreeBlock(&myFS);
-		if(firstFreeBlock == -1) return -1;
-		fputs("TAMANIO=0\n",newFileDescriptor);
-		sprintf(bloques,"BLOQUES=[%d]\n",firstFreeBlock);
+		if(firstFreeBlock == -1) {
+			log_error(logger,"Error creating file");
+			return -1;
+		}
+		fputs("TAMANIO=0\n",newFileDescriptor); // Arrancan con tamanio 0
+		sprintf(bloques,"BLOQUES=[%d]\n",firstFreeBlock); //Pasa info de bloques a bloques y la vuelca al archivo
 		fputs(bloques,newFileDescriptor);
-		fs_createBlockFile(firstFreeBlock);
+		fs_createBlockFile(firstFreeBlock); //Crea archivo de bloque
 		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
@@ -418,7 +430,7 @@ int fs_deleteBlockFile(int blockNumber){
 
 
 }
-int fs_getFirstFreeBlock(t_FS *FS){
+int fs_getFirstFreeBlock(t_FS *FS){ //Recorre bitmap hasta encontrar primer bloque no set
 	int counter = 0;
 	while(counter < FS->metadata.blockAmount){
 		if(!bitarray_test_bit(FS->bitmap,counter)){
@@ -428,7 +440,7 @@ int fs_getFirstFreeBlock(t_FS *FS){
 	}
 	return -1;
 }
-int fs_getNumberOfDigits(int number){
+int fs_getNumberOfDigits(int number){ //Dado un numero devuelve su cantidad de digitos (usado para alocar espacio justo al crear block files)
 	if(!number){
 		return 1;
 	}
@@ -459,6 +471,7 @@ int *fs_getArrayFromString(char **stringArray, int numberOfBlocks){
 	token = strtok(stringPointer,",");
 
 	if(!token){
+		log_error(logger,"Fallo al convertir String a Array");
 		return -1;
 	}
 
@@ -552,14 +565,13 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 	FILE *metadataFilePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(metadataFilePointer);
 
-	int sparseBlocks = offset / myFS.metadata.blockSize;
+
+	int sparseBlocks = offset / myFS.metadata.blockSize;  //Block Index
 	int amountOfBlocksOfContent = size / myFS.metadata.blockSize;
 
 	int carriedFloatingPoint = (offset % myFS.metadata.blockSize)+(size % myFS.metadata.blockSize);
-
 	int amountOfBlocksToWrite = 1 + sparseBlocks + amountOfBlocksOfContent;
-
-	if(carriedFloatingPoint > myFS.metadata.blockSize) amountOfBlocksToWrite++;
+	if(carriedFloatingPoint > myFS.metadata.blockSize) amountOfBlocksToWrite++; //Si se paso apenas de un bloque ya lo esta ocupando
 
 	int fileBlockCount = (fileMetadata.size / myFS.metadata.blockSize) + 1;
 
@@ -729,24 +741,26 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size){
 
 	if(fs_validateFile(fileName)){ //If the path is invalid
 			log_error(logger, "Invalid path - Can not write file");
-			return -1;
+			return 'f';
 	}
 
 	error = fseek(blockFilePointer, offset, SEEK_SET);
 
-	if(error == -1){
-		log_error(logger, "Error while seeking offset on READ FILE operation");
-		return -1;
+
+	if (strlen(blockFilePointer) == 0) {
+		log_error(logger, "Error while seeking offset on READ FILE operation (No bytes read - possible sparse file)");
+		return 'f';
 	}
+
 
 	fflush(stdin);
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
 
 	error = fgets(readValues, size+1, blockFilePointer);
 
-	if(error == -1){
+	if(error == NULL){
 		log_error(logger, "Error while reading on READ FILE operation");
-		return -1;
+		return 'f';
 	}
 
 	printf("Reading %d bytes with %d offset from block %d : %s \n", strlen(readValues),offset,blockNumberToRead, readValues);
@@ -780,33 +794,47 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 	FILE *filePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
 
-	int amountOfBlocksInMetadata = fileMetadata.size / myFS.metadata.blockSize;
-	int currentBlockNumber = offset / myFS.metadata.blockSize; //todo: validar que el primer bloque es mio
-	int amountOfBlocksToRead = size / myFS.metadata.blockSize; //todo: validar que caigo en un bloque mio
+	int amountOfBlocksInMetadata = 1 + fileMetadata.size / myFS.metadata.blockSize;
+	int currentBlockIndex = offset / myFS.metadata.blockSize;
+	int finalBlockToRead =  1 + (offset + size) / myFS.metadata.blockSize;
+
+	int totalBytesUntilEndOfFile = fileMetadata.size - offset;
+	if(currentBlockIndex > amountOfBlocksInMetadata || size > totalBytesUntilEndOfFile){
+		log_error(logger, "Invalid block - could not read program %s", filePath);
+		return -1;
+	}
+
+
+	int amountOfBlocksToRead = size / myFS.metadata.blockSize;
 	int readOffset = offset % myFS.metadata.blockSize;
 	int bytesUntilEndOfBlock =  myFS.metadata.blockSize - readOffset;
 	int bytesRemainingToRead = size;
-	int currentBlock = fileMetadata.blocks[currentBlockNumber];
+	int currentBlock = fileMetadata.blocks[currentBlockIndex];
 	char *readValues = malloc(size);
 	memset(readValues,0,size);
 	char *buffer;
 	int offsetBuffer = 0;
 
+
 	while(bytesRemainingToRead <= size){ //Mientras todavia quede por leer
 
 		if(bytesRemainingToRead > bytesUntilEndOfBlock){ //Si tiene que leer mas de un bloque
 			buffer = fs_readBlockFile(currentBlock, readOffset, bytesUntilEndOfBlock); //Lee hasta fin de bloque
+			if(buffer == 'f') return -1; //fails
+
 			memcpy(readValues+offsetBuffer, buffer, bytesUntilEndOfBlock);
 			bytesRemainingToRead -= bytesUntilEndOfBlock; //Resta los bytes que leyo
 			// jump to next block
-			currentBlockNumber++;
-			currentBlock = fileMetadata.blocks[currentBlockNumber];
+			currentBlockIndex++;
+			currentBlock = fileMetadata.blocks[currentBlockIndex];
 			offsetBuffer += strlen(buffer);
 			bytesUntilEndOfBlock = myFS.metadata.blockSize;
 			readOffset = 0;
 
 		}else{ //Si tiene que terminar de leer los bytes restantes en el currentblock
-			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockNumber], readOffset, bytesRemainingToRead);
+			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockIndex], readOffset, bytesRemainingToRead);
+			if(buffer == 'f') return -1; //fails
+
 			memcpy(readValues+offsetBuffer, buffer, bytesRemainingToRead);
 			bytesRemainingToRead = 0;
 			offsetBuffer += strlen(buffer);
@@ -818,12 +846,32 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size){
 
 	}
 
-	printf("READ: %s\n",readValues);
+	printf("READ %d BYTES WITH %d OFFSET FROM FILE [%s]: %s\n",strlen(readValues), offset, filePath,readValues);
 
 	return EXIT_SUCCESS;
 
 
+}
 
+int fs_fileContainsBlockNumber(char *filePath,int blockNumber){//No se usa por ahora - dice si un bloque esta contenido por un archivo
+
+	FILE *filePointer = fopen(filePath, "r+");
+	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
+
+	int amountOfBlocksInMetadata = 1 + fileMetadata.size / myFS.metadata.blockSize;
+
+	int iterator = 0;
+
+		while(iterator < amountOfBlocksInMetadata){
+
+			if(fileMetadata.blocks[iterator] == blockNumber){
+				return EXIT_SUCCESS;
+			}
+
+			iterator++;
+		}
+
+		return EXIT_FAILURE;
 
 }
 
@@ -851,12 +899,6 @@ int main(int argc, char **argv) {
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
 
-
-	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba2.bin");
-	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba3.bin");
-	//fs_createFile("/mnt/SADICA_FS/Archivos/prueba4.bin");
-
-
 	//char *bafer = string_new();
 
 	//string_append(&bafer, "h");
@@ -865,16 +907,26 @@ int main(int argc, char **argv) {
 	//fs_dump();
 
 	char *bafer = string_new();
-	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
 
-
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
+	string_append(&bafer,"c");
+    fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288,strlen(bafer),bafer);
 
 
 	fs_dump();
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,129);
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,65);
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,9);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 129);
+
+
+
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",332.288, 1);
+	 /*fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64, 65);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 75);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",123123, 10);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0, 12312312);
+	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin",64,66);
+*/
+
 	/*fs_removeFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
 	fs_dump();
 	 */
