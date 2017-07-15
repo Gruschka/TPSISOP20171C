@@ -450,7 +450,7 @@ int mem_addPagesToProcess(int32_t processID, int32_t numberOfPages) {
 
 	pthread_rwlock_unlock(&physicalMemoryRwlock);
 
-	return 1;
+	return firstPageNumberToAssign;
 }
 
 int mem_removePageFromProcess(int32_t processID, int32_t processPageNumber) {
@@ -890,6 +890,7 @@ void *connection_handler(void *shit) {
 			ipc_struct_memory_request_more_pages_response response;
 			response.header.operationIdentifier = MEMORY_REQUEST_MORE_PAGES_RESPONSE;
 			response.success = result > 0 ? 1 : 0;
+			response.firstPageNumber = result;
 
 			send(sockfd, &response, sizeof(ipc_struct_memory_request_more_pages_response), 0);
 			break;

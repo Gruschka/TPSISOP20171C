@@ -40,7 +40,9 @@ typedef enum {
 	MEMORY_DEINIT_PROGRAM_RESPONSE,
 	CPU_EXECUTE_PROGRAM,
 	KERNEL_SEMAPHORE_WAIT,
-	KERNEL_SEMAPHORE_WAIT_RESPONSE
+	KERNEL_SEMAPHORE_WAIT_RESPONSE,
+	KERNEL_ALLOC_HEAP,
+	KERNEL_ALLOC_HEAP_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -152,6 +154,7 @@ typedef struct memory_request_more_pages {
 typedef struct memory_request_more_pages_response {
 	ipc_header header;
 	char success;
+	int firstPageNumber;
 } __attribute__((packed)) ipc_struct_memory_request_more_pages_response;
 
 typedef struct memory_remove_page_from_program {
@@ -187,6 +190,19 @@ typedef struct kernel_semaphore_wait_response {
 	ipc_header header;
 	char shouldBlock;
 } __attribute__((packed)) ipc_struct_kernel_semaphore_wait_response;
+
+typedef struct kernel_alloc_heap {
+	ipc_header header;
+	int processID;
+	int numberOfBytes;
+} __attribute__((packed)) ipc_struct_kernel_alloc_heap;
+
+typedef struct kernel_alloc_heap_response {
+	ipc_header header;
+	char success;
+	int pageNumber;
+	int offset;
+} __attribute__((packed)) ipc_struct_kernel_alloc_heap_response;
 
 typedef struct cpu_execute_program {
 	ipc_header header;
