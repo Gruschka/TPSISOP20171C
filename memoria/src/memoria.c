@@ -810,6 +810,14 @@ void *connection_handler(void *shit) {
 		log_debug(consoleLog, "Operation identifier: %d", header.operationIdentifier);
 
 		switch (header.operationIdentifier) {
+		case HANDSHAKE: {
+			ipc_struct_handshake handshake;
+			recv(sockfd, &handshake, sizeof(ipc_struct_handshake), 0);
+			log_info(consoleLog, "Handshake received. Process identifier: %s", processName(handshake.processIdentifier));
+
+			ipc_server_sendHandshakeResponse(sockfd, 1, k_frameSize);
+			break;
+		}
 		case MEMORY_INIT_PROGRAM: {
 			ipc_struct_memory_init_program request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_init_program), 0);
