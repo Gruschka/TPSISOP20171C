@@ -764,10 +764,31 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_open_file *openFile = buffer;
 		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %d%d%d", openFile->path, openFile->creation, openFile->read, openFile->write);
 
+		//hardcodeado durlock
+		ipc_struct_kernel_open_file_response response;
+		response.header.operationIdentifier = KERNEL_OPEN_FILE_RESPONSE;
+		response.success = 1;
+		response.fileDescriptor = 22;
+
+		send(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
+		break;
+	}
+	case KERNEL_WRITE_FILE: {
+		ipc_struct_kernel_write_file *write = buffer;
+
+		log_debug(logger, "KERNEL_WRITE_FILE: FD %d. size: %d", write->fileDescriptor, write->size);
+		ipc_struct_kernel_write_file_response response;
+		response.header.operationIdentifier = KERNEL_WRITE_FILE_RESPONSE;
+		response.success = 1;
+
+		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
 		break;
 	}
 	case KERNEL_READ_FILE: {
 		ipc_struct_kernel_read_file *readFile = buffer;
+
+		log_debug(logger, "KERNEL_READ_FILE: FD %d. size: %d", readFile->fileDescriptor, readFile->size);
+
 		break;
 	}
 	case KERNEL_MOVE_FILE_CURSOR: {

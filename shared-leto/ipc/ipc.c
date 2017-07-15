@@ -213,6 +213,18 @@ int ipc_createServer(char *port,
 					moveFileCursor->header.operationIdentifier, moveFileCursor);
 			break;
 		}
+		case KERNEL_DELETE_FILE: {
+			ipc_struct_kernel_delete_file *deleteFile = malloc(sizeof(ipc_struct_kernel_delete_file));
+
+			recv(fd, deleteFile, sizeof(ipc_struct_kernel_delete_file), 0);
+			break;
+		}
+		case KERNEL_CLOSE_FILE: {
+			ipc_struct_kernel_close_file *closeFile = malloc(sizeof(ipc_struct_kernel_close_file));
+
+			recv(fd, closeFile, sizeof(ipc_struct_kernel_close_file), 0);
+			break;
+		}
 		default:
 			break;
 		}
