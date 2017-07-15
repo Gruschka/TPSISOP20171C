@@ -73,12 +73,12 @@ t_log *logger;
 void *cpu_readMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size){
 	void *buffer = malloc(size);
 
-	memcpy(buffer,myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,size);
+	memcpy(buffer,myMemory+(page*myCPU.pageSize)+offset,size);
 
 	return buffer;
 }
 uint32_t cpu_writeMemoryDummy(uint32_t pid, uint32_t page, uint32_t offset, uint32_t size, void *buffer){
-	memcpy(myMemory+(page*DUMMY_MEMORY_PAGE_SIZE)+offset,buffer,size);
+	memcpy(myMemory+(page*myCPU.pageSize)+offset,buffer,size);
 }
 void *cpu_readMemory(int pid, int page, int offset, int size) {
 	if(myCPU.connections[T_MEMORY].isDummy) return cpu_readMemoryDummy(pid,page,offset,size);
@@ -197,6 +197,7 @@ uint32_t cpu_connect(t_CPU *aCPU, t_connectionType connectionType){
 
 			   ipc_client_sendHandshake(CPU, memoryConnection->socketFileDescriptor);
 			   response = ipc_client_waitHandshakeResponse(memoryConnection->socketFileDescriptor);
+			   myCPU.pageSize = response->info;
 			   free(response);
 			   memoryConnection->status = CONNECTED;
 			   aCPU->connections[T_MEMORY].isDummy = 0;
@@ -215,7 +216,7 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	int programLength = string_length(script);
 	t_metadata_program *program = metadata_desde_literal(script);
 
-	int codePagesCount = programLength / DUMMY_MEMORY_PAGE_SIZE;
+	int codePagesCount = programLength / myCPU.pageSize;
 	int instructionCount = program->instrucciones_size;
 
 	PCB->variableSize.stackArgumentCount = 0;
@@ -236,7 +237,7 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	PCB->filesTable = NULL;
 	PCB->pc = 0;
 	PCB->pid = rand();
-	PCB->sp = PCB->codePages +1 * DUMMY_MEMORY_PAGE_SIZE;
+	PCB->sp = PCB->codePages +1 * myCPU.pageSize;
 	PCB->stackIndex = NULL;
 
 	return PCB;
@@ -245,7 +246,7 @@ uint32_t cpu_declareVariable(char variableName){
 //	printf("declareVariable\n");
 	t_variableAdd type = pcb_getVariableAddTypeFromTag(variableName);
 	t_stackVariable *variable = malloc(sizeof(t_stackVariable));
-	int dataBasePage = myCPU.assignedPCB->codePages +1;
+	int dataBasePage = myCPU.assignedPCB->codePages;
 	t_PCBVariableSize *variableSize = &myCPU.assignedPCB->variableSize;
 	int currentVariableSpaceInMemory = (variableSize->stackVariableCount + variableSize->stackArgumentCount) * sizeof(int);
 	int currentVariablePagesInMemory = 0;
@@ -255,9 +256,9 @@ uint32_t cpu_declareVariable(char variableName){
 	variable->id = variableName;
 	variable->page = dataBasePage;
 	if(currentVariableSpaceInMemory != 0){
-		currentVariablePagesInMemory = currentVariableSpaceInMemory / DUMMY_MEMORY_PAGE_SIZE;
+		currentVariablePagesInMemory = currentVariableSpaceInMemory / myCPU.pageSize;
 		variable->page += currentVariablePagesInMemory;
-		variable->offset = currentVariableSpaceInMemory - (currentVariablePagesInMemory * DUMMY_MEMORY_PAGE_SIZE);
+		variable->offset = currentVariableSpaceInMemory - (currentVariablePagesInMemory * myCPU.pageSize);
 	}else{
 		variable->offset = currentVariableSpaceInMemory;
 	}
@@ -281,20 +282,24 @@ uint32_t cpu_getVariablePosition(char variableName){
 
 	t_stackVariable *variable = pcb_getVariable(myCPU.assignedPCB,variableName);
 
-	int position = (variable->page * DUMMY_MEMORY_PAGE_SIZE) + variable->offset;
-	return position;
+
+	return cpu_getPointerFromVariableReference(*variable);
 }
 int cpu_dereference(uint32_t variableAddress){
 	//rintf("dereference\n");
-	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int));
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(variableAddress,&variable);
+	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int));
 	int value = *valueBuffer;
 	free(valueBuffer);
 	return value;
 }
 void cpu_assignValue(uint32_t variableAddress, int value){
 	//printf("assignValue\n");
+	t_stackVariable variable;
+	cpu_getVariableReferenceFromPointer(variableAddress,&variable);
 	int valueBuffer = value;
-	cpu_writeMemory(myCPU.assignedPCB->pid,0,variableAddress,sizeof(int),&valueBuffer);
+	cpu_writeMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int),&valueBuffer);
 }
 void cpu_gotoLabel(char *label){
 	printf("gotoLabel\n");
@@ -397,40 +402,324 @@ ipc_struct_kernel_semaphore_wait_response ipc_sendSemaphoreWait(int fd, char *id
 
 	return response;
 }
+ipc_struct_kernel_semaphore_signal ipc_sendSemaphoreSignal(int fd, char *identifier){
+	ipc_struct_kernel_semaphore_signal*signal = malloc(sizeof(ipc_struct_kernel_semaphore_signal));
+	char * identifierCopy = strdup(identifier);
+
+	signal->header.operationIdentifier = KERNEL_SEMAPHORE_SIGNAL;
+	signal->identifierLength = strlen(identifier)+1;
+	signal->identifier = malloc(strlen(identifier) + 1);
+	memcpy(signal->identifier, identifier, strlen(identifier) + 1);
+
+	int bufferSize = 0;
+	int bufferOffset = 0;
+	bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(identifier)+1;
+	char *buffer = malloc(bufferSize);
+
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&signal->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&signal->identifierLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,identifierCopy,strlen(identifier)+1);
+	bufferOffset += strlen(identifier)+1;
+
+	send(fd, buffer, bufferSize, 0);
+
+	return *signal;
+}
+ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_kernel_alloc_heap *request){
+	int bufferSize = sizeof(ipc_struct_kernel_alloc_heap);
+	int bufferOffset = 0;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&request->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request->processID,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request->numberOfBytes,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_alloc_heap_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_free_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
+	int bufferSize = sizeof(ipc_struct_kernel_free_heap);
+	int bufferOffset = 0;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	ipc_struct_kernel_free_heap request;
+
+	request.header.operationIdentifier = KERNEL_FREE_HEAP;
+	request.pointer = pointer;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pointer,sizeof(uint32_t));
+	bufferOffset += sizeof(uint32_t);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_free_heap_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_free_heap_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
+	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_open_file request;
+
+	request.header.operationIdentifier = KERNEL_OPEN_FILE;
+	request.creation = flags.creation;
+	request.read = flags.read;
+	request.write = flags.write;
+	request.pathLength = strlen(path)+1;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pathLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	char *pathCopy = strdup(path);
+	memcpy(buffer+bufferOffset,pathCopy,request.pathLength);
+	bufferOffset += request.pathLength;
+	free(pathCopy);
+
+	memcpy(buffer+bufferOffset,&request.read,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.write,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.creation,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_open_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_delete_file_response ipc_sendKernelDeleteFile(int fd, int fileDescriptor){
+	int bufferSize = sizeof(ipc_struct_kernel_delete_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_delete_file request;
+
+	request.header.operationIdentifier = KERNEL_DELETE_FILE;
+	request.fileDescriptor = fileDescriptor;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_delete_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_delete_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_close_file_response ipc_sendKernelCloseFile(int fd, int fileDescriptor){
+	int bufferSize = sizeof(ipc_struct_kernel_close_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_close_file request;
+
+	request.header.operationIdentifier = KERNEL_CLOSE_FILE;
+	request.fileDescriptor = fileDescriptor;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_close_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_close_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd, int fileDescriptor, int position){
+	int bufferSize = sizeof(ipc_struct_kernel_move_file_cursor);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_move_file_cursor request;
+
+	request.header.operationIdentifier = KERNEL_MOVE_FILE_CURSOR;
+	request.fileDescriptor = fileDescriptor;
+	request.position = position;
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.position,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_move_file_cursor_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDescriptor, int size, char *content){
+	int bufferSize = sizeof(ipc_struct_kernel_write_file) + strlen(content) +1;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_write_file request;
+
+	request.header.operationIdentifier = KERNEL_WRITE_FILE;
+	request.fileDescriptor = fileDescriptor;
+	request.size = size;
+	request.buffer = strdup(content);
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.buffer,strlen(content)+1);
+	bufferOffset += strlen(content)+1;
+	free(request.buffer);
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_write_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
+
+	return response;
+
+}
+ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDescriptor, uint32_t valuePointer, int size){
+	int bufferSize = sizeof(ipc_struct_kernel_read_file);
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+
+	int bufferOffset = 0;
+	ipc_struct_kernel_read_file request;
+
+	request.header.operationIdentifier = KERNEL_READ_FILE;
+	request.fileDescriptor = fileDescriptor;
+	request.size = size;
+	request.valuePointer = valuePointer;
+
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,&request.valuePointer,sizeof(uint32_t));
+	bufferOffset += sizeof(uint32_t);
+
+	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
+	bufferOffset += sizeof(int);
+
+
+	send(fd, buffer, bufferSize, 0);
+
+	ipc_struct_kernel_read_file_response response;
+	recv(fd, &response, sizeof(ipc_struct_kernel_read_file_response), 0);
+
+	return response;
+
+}
 
 void cpu_kernelWait(char *semaphoreId){
 	printf("kernelWait\n");
 	fflush(stdout);
 	myCPU.assignedPCB->pc = myCPU.instructionPointer;
 	ipc_struct_kernel_semaphore_wait_response response = ipc_sendSemaphoreWait(myCPU.connections[T_KERNEL].socketFileDescriptor, semaphoreId);
-	myCPU.status = WAITING;
+	if(response.shouldBlock == 1) myCPU.status = WAITING;
 }
 void cpu_kernelSignal(char *semaphoreId){
 	printf("kernelSignal\n");
+	ipc_struct_kernel_semaphore_signal response = ipc_sendSemaphoreSignal(myCPU.connections[T_KERNEL].socketFileDescriptor, semaphoreId);
 	fflush(stdout);
 }
 uint32_t cpu_kernelAlloc(int size){
 	printf("kernelAlloc\n");
+	ipc_struct_kernel_alloc_heap request;
+	request.header.operationIdentifier = KERNEL_ALLOC_HEAP;
+	request.numberOfBytes = size;
+	request.processID = myCPU.assignedPCB->pid;
+	ipc_struct_kernel_alloc_heap_response response = ipc_sendKernelAlloc(myCPU.connections[T_KERNEL].socketFileDescriptor,&request);
 	fflush(stdout);
+	t_stackVariable variable;
+	variable.page = response.pageNumber;
+	variable.offset = response.offset;
+	return cpu_getPointerFromVariableReference(variable);
 }
 void cpu_kernelFree(uint32_t pointer){
 	printf("kernelFree\n");
+	ipc_struct_kernel_free_heap_response response = ipc_sendKernelFree(myCPU.connections[T_KERNEL].socketFileDescriptor,pointer);
 	fflush(stdout);
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
 	printf("kernelOpen\n");
+	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor,address,flags);
+
 	fflush(stdout);
 }
 void cpu_kernelDelete(uint32_t fileDescriptor){
 	printf("kernelDelete\n");
+	ipc_struct_kernel_delete_file_response response = ipc_sendKernelDeleteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
+
 	fflush(stdout);
 }
 void cpu_kernelClose(uint32_t fileDescriptor){
 	printf("kernelClose\n");
+	ipc_struct_kernel_close_file_response response = ipc_sendKernelCloseFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
 	fflush(stdout);
 }
 void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position){
 	printf("kernelMoveCursor\n");
+	ipc_struct_kernel_move_file_cursor_response response = ipc_sendKernelMoveFileCursor(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,position);
 	fflush(stdout);
 }
 void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
@@ -439,16 +728,18 @@ void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
 	printf("%s\n",output);
 	fflush(stdout);
 	free(output);
+	ipc_struct_kernel_write_file_response response = ipc_sendKernelWriteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,buffer,size);
 }
 void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size){
 	printf("kernelRead\n");
+	ipc_struct_kernel_read_file_response response = ipc_sendKernelReadFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,value,size);
 	fflush(stdout);
 }
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
 	t_memoryDirection direction;
 
-	direction.page = address / DUMMY_MEMORY_PAGE_SIZE;
-	direction.offset = address - (direction.page * DUMMY_MEMORY_PAGE_SIZE);
+	direction.page = address / myCPU.pageSize;
+	direction.offset = address - (direction.page * myCPU.pageSize);
 	direction.size = sizeof(int);
 
 	return direction;
@@ -500,6 +791,13 @@ int cpu_receivePCB(){
 	return 0;
 }
 
+void cpu_getVariableReferenceFromPointer(uint32_t pointer, t_stackVariable *variable){
+	variable->offset = (uint16_t) pointer;
+	variable->page = pointer >> 16;
+}
+uint32_t cpu_getPointerFromVariableReference(t_stackVariable variable){
+	return ((uint16_t) variable.page << 16) | variable.offset;
+}
 
 
  AnSISOP_funciones functions = {
@@ -540,7 +838,6 @@ int main() {
 	cpu_connect(&myCPU,T_MEMORY);
 	cpu_connect(&myCPU,T_KERNEL);
 
-
 	while (1) {
 		myCPU.status = WAITING;
 
@@ -550,8 +847,8 @@ int main() {
 		while(myCPU.status == RUNNING && myCPU.quantum > 0){
 			   //cpu fetch
 			   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
-			   int page = currentInstructionIndex.start / DUMMY_MEMORY_PAGE_SIZE;
-			   int offset = currentInstructionIndex.start - (page * DUMMY_MEMORY_PAGE_SIZE);
+			   int page = currentInstructionIndex.start / myCPU.pageSize;
+			   int offset = currentInstructionIndex.start - (page * myCPU.pageSize);
 
 			   char *instruction = cpu_readMemory(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
 			   instruction[currentInstructionIndex.size-1]='\0';
@@ -566,36 +863,6 @@ int main() {
 			   myCPU.instructionPointer++;
 		   }
 	}
-
-
-
-
-   //generate PCB
-//   t_PCB *dummyPCB = cpu_createPCBFromScript(testProgram);
-//
-//   void *serializedPCB = pcb_serializePCB(dummyPCB);
-//
-//   pcb_destroy(dummyPCB);
-//
-//   t_PCBVariableSize *variableInfo = malloc(sizeof(t_PCBVariableSize));
-//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, variableInfo, sizeof(t_PCBVariableSize), 0);
-//
-//   uint32_t size = pcb_getBufferSizeFromVariableSize(variableInfo);
-//
-//   void *bafer = malloc(size);
-//   recv(myCPU.connections[T_KERNEL].socketFileDescriptor, bafer, size, 0);
-////   memcpy(variableInfo,serializedPCB,sizeof(t_PCBVariableSize));
-////
-////   // PCB received
-//   t_PCB *newPCB = pcb_deSerializePCB(bafer, variableInfo);
-//
-//   pcb_dump(newPCB);
-//
-//
-
-
-   //instruction cycle
-
 
 
 	return EXIT_SUCCESS;

@@ -44,7 +44,23 @@ typedef enum {
 	KERNEL_SEMAPHORE_SIGNAL,
 	KERNEL_SEMAPHORE_SIGNAL_RESPONSE,
 	KERNEL_ALLOC_HEAP,
-	KERNEL_ALLOC_HEAP_RESPONSE
+	KERNEL_ALLOC_HEAP_RESPONSE,
+	KERNEL_FREE_HEAP,
+	KERNEL_FREE_HEAP_RESPONSE,
+	KERNEL_DEALLOC_HEAP,
+	KERNEL_DEALLOC_HEAP_RESPONSE,
+	KERNEL_OPEN_FILE,
+	KERNEL_OPEN_FILE_RESPONSE,
+	KERNEL_DELETE_FILE,
+	KERNEL_DELETE_FILE_RESPONSE,
+	KERNEL_CLOSE_FILE,
+	KERNEL_CLOSE_FILE_RESPONSE,
+	KERNEL_MOVE_FILE_CURSOR,
+	KERNEL_MOVE_FILE_CURSOR_RESPONSE,
+	KERNEL_WRITE_FILE,
+	KERNEL_WRITE_FILE_RESPONSE,
+	KERNEL_READ_FILE,
+	KERNEL_READ_FILE_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -211,6 +227,86 @@ typedef struct kernel_alloc_heap_response {
 	int pageNumber;
 	int offset;
 } __attribute__((packed)) ipc_struct_kernel_alloc_heap_response;
+
+typedef struct kernel_free_heap {
+	ipc_header header;
+	uint32_t pointer;
+} __attribute__((packed)) ipc_struct_kernel_free_heap;
+
+typedef struct kernel_alloc_free_heap_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_free_heap_response;
+
+typedef struct kernel_open_file {
+	ipc_header header;
+	int pathLength;
+	char *path;
+	int read;
+	int write;
+	int creation;
+} __attribute__((packed)) ipc_struct_kernel_open_file;
+
+typedef struct kernel_open_file_response {
+	ipc_header header;
+	char success;
+	int fileDescriptor;
+} __attribute__((packed)) ipc_struct_kernel_open_file_response;
+
+typedef struct kernel_delete_file {
+	ipc_header header;
+	int fileDescriptor;
+} __attribute__((packed)) ipc_struct_kernel_delete_file;
+
+typedef struct kernel_delete_file_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_delete_file_response;
+
+typedef struct kernel_close_file {
+	ipc_header header;
+	int fileDescriptor;
+} __attribute__((packed)) ipc_struct_kernel_close_file;
+
+typedef struct kernel_close_file_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_close_file_response;
+
+typedef struct kernel_move_file_cursor {
+	ipc_header header;
+	int fileDescriptor;
+	int position;
+} __attribute__((packed)) ipc_struct_kernel_move_file_cursor;
+
+typedef struct kernel_move_file_cursor_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_move_file_cursor_response;
+
+typedef struct kernel_write_file {
+	ipc_header header;
+	int fileDescriptor;
+	int size;
+	char *buffer;
+} __attribute__((packed)) ipc_struct_kernel_write_file;
+
+typedef struct kernel_write_file_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_write_file_response;
+
+typedef struct kernel_read_file {
+	ipc_header header;
+	int fileDescriptor;
+	uint32_t valuePointer;
+	int size;
+} __attribute__((packed)) ipc_struct_kernel_read_file;
+
+typedef struct kernel_read_file_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_read_file_response;
 
 typedef struct cpu_execute_program {
 	ipc_header header;

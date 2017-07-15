@@ -65,6 +65,7 @@ typedef struct CPUConnection{
 typedef struct CPU{
 	int quantum;
 	int variableCounter;
+	int pageSize;
 	t_CPUConnection connections[2];
 	int instructionPointer;
 	char *currentInstruction;
@@ -105,4 +106,6 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address);
 int cpu_sharedVariableGet(char *identifier);
 int cpu_sharedVariableSet(char *identifier, int value);
 int cpu_receivePCB();
+void cpu_getVariableReferenceFromPointer(uint32_t pointer, t_stackVariable *variable);
+uint32_t cpu_getPointerFromVariableReference(t_stackVariable variable);
 #endif /* CPU_H_ */
