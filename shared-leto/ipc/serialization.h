@@ -45,6 +45,8 @@ typedef enum {
 	KERNEL_SEMAPHORE_SIGNAL_RESPONSE,
 	KERNEL_ALLOC_HEAP,
 	KERNEL_ALLOC_HEAP_RESPONSE,
+	KERNEL_FREE_HEAP,
+	KERNEL_FREE_HEAP_RESPONSE,
 	KERNEL_DEALLOC_HEAP,
 	KERNEL_DEALLOC_HEAP_RESPONSE,
 	KERNEL_OPEN_FILE,
@@ -225,6 +227,16 @@ typedef struct kernel_alloc_heap_response {
 	int pageNumber;
 	int offset;
 } __attribute__((packed)) ipc_struct_kernel_alloc_heap_response;
+
+typedef struct kernel_free_heap {
+	ipc_header header;
+	uint32_t pointer;
+} __attribute__((packed)) ipc_struct_kernel_free_heap;
+
+typedef struct kernel_alloc_free_heap_response {
+	ipc_header header;
+	char success;
+} __attribute__((packed)) ipc_struct_kernel_free_heap_response;
 
 typedef struct kernel_open_file {
 	ipc_header header;
