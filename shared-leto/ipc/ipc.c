@@ -68,7 +68,9 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				request->identifierLength = identifierLength;
 
 				deserializedStructHandler(fd, header->operationIdentifier, request);
+
 				break;
+			}
 			case KERNEL_SEMAPHORE_WAIT: {
 				ipc_header header;
 				recv(fd, &header, sizeof(ipc_header), 0);
@@ -95,6 +97,23 @@ int ipc_createServer(char *port, EpollConnectionEventHandler newConnectionHandle
 				deserializedStructHandler(fd, semaphoreWait->header.operationIdentifier, semaphoreWait);
 				break;
 			}
+			case KERNEL_SEMAPHORE_SIGNAL: {
+				ipc_header header;
+				recv(fd, &header, sizeof(ipc_header), 0);
+
+				int identifierLength;
+				recv(fd, &identifierLength, sizeof(int), 0);
+
+				char *identifier = malloc(identifierLength);
+				recv(fd, identifier, identifierLength, 0);
+
+				ipc_struct_kernel_semaphore_signal *signal = malloc(sizeof(ipc_struct_kernel_semaphore_signal));
+				signal->header.operationIdentifier = KERNEL_SEMAPHORE_SIGNAL;
+				signal->identifier = identifier;
+				signal->identifierLength = identifierLength;
+
+				deserializedStructHandler(fd, signal->header.operationIdentifier, signal);
+				break;
 			}
 		default:
 			break;

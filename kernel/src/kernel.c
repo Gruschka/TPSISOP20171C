@@ -207,7 +207,15 @@ int connectToMemory() {
 		return -1;
 	}
 
-	log_debug(logger, "Connected to memory");
+	ipc_client_sendHandshake(KERNEL, memory_sockfd);
+	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(memory_sockfd);
+
+	if (response->success == 0) {
+		log_error(logger, "Error connecting to memory");
+		return -1;
+	}
+
+	log_debug(logger, "[memory] connected. page size: %d", response->info);
 
 	return 0;
 }
@@ -575,7 +583,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_handshake *handshake = buffer;
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
-		ipc_server_sendHandshakeResponse(fd, 1, 256);
+		ipc_server_sendHandshakeResponse(fd, 1, configuration->stackSize);
 		break;
 	}
 	case GET_SHARED_VARIABLE: {
@@ -627,7 +635,13 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			list_takePCB(execList, waitPCB->pid);
 			pthread_mutex_unlock(&execList_mutex);
 		}
-
+		break;
+	}
+	case KERNEL_SEMAPHORE_SIGNAL: {
+		ipc_struct_kernel_semaphore_signal *signal = buffer;
+		log_info(logger, "kernel_semaphore_signal. identifier: %s", signal->identifier);
+		kernel_semaphore *sem = getSemaphoreByIdentifier(signal->identifier);
+		kernel_semaphore_signal(sem, NULL);
 		break;
 	}
 	default:

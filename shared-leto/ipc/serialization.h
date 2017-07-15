@@ -41,6 +41,8 @@ typedef enum {
 	CPU_EXECUTE_PROGRAM,
 	KERNEL_SEMAPHORE_WAIT,
 	KERNEL_SEMAPHORE_WAIT_RESPONSE,
+	KERNEL_SEMAPHORE_SIGNAL,
+	KERNEL_SEMAPHORE_SIGNAL_RESPONSE,
 	KERNEL_ALLOC_HEAP,
 	KERNEL_ALLOC_HEAP_RESPONSE
 } ipc_operationIdentifier;
@@ -190,6 +192,12 @@ typedef struct kernel_semaphore_wait_response {
 	ipc_header header;
 	char shouldBlock;
 } __attribute__((packed)) ipc_struct_kernel_semaphore_wait_response;
+
+typedef struct kernel_semaphore_signal {
+	ipc_header header;
+	int identifierLength;
+	char *identifier;
+} __attribute__((packed)) ipc_struct_kernel_semaphore_signal;
 
 typedef struct kernel_alloc_heap {
 	ipc_header header;
