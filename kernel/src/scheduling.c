@@ -132,6 +132,7 @@ void dump_list(char *listName, t_list *list) {
 		t_PCB *pcb = list_get(list, i);
 		printf("[%s] process<PID: %d>", listName, pcb->pid);
 	}
+	printf("\n");
 }
 
 t_PCB *findPCB(t_list *list, int pid) {

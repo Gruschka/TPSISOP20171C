@@ -59,7 +59,10 @@ int create_and_bind (char *port) {
 
   for (rp = result; rp != NULL; rp = rp->ai_next)
     {
+	  int iSetOption = 1;
       sfd = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+      setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption,
+              sizeof(iSetOption));
       if (sfd == -1)
         continue;
 

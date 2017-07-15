@@ -60,5 +60,6 @@ void semaphoreDidWakeProcess(t_PCB *pcb, char *identifier);
 
 void executeNewProgram(t_PCB *pcb);
 t_PCB *createPCBFromScript(char *script);
+void markCPUAsFree(int fd);
 
 #endif /* KERNEL_H_ */

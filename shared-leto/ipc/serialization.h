@@ -60,6 +60,7 @@ typedef struct handshake {
 typedef struct handshake_response {
 	ipc_header header;
 	char success;
+	uint32_t info;
 } __attribute__((packed)) ipc_struct_handshake_response;
 
 typedef struct program_start {
