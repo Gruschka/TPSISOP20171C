@@ -494,7 +494,7 @@ ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t poin
 
 }
 ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
-	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1;
+	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1 - sizeof(int);
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
 
