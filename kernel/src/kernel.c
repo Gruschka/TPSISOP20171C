@@ -107,40 +107,6 @@ void initSemaphores() {
 	}
 }
 
-void testMemory() {
-	void *page = memory_createPage(pageSize);
-//	void *block = memory_addBlock(page, 50);
-	void *firstBlock = memory_addBlock(page, 200);
-	void *secondBlock = memory_addBlock(page, 35);
-	void *thirdBlock = memory_addBlock(page, 157);
-	void *fourthBlock = memory_addBlock(page, 43);
-
-	log_debug(logger, "fourthBlock: %p", fourthBlock);
-	memory_dumpPage(page);
-
-//	shared_variable *a = createSharedVariable("A");
-//	shared_variable *b = createSharedVariable("B");
-//	shared_variable *c = createSharedVariable("C");
-//	shared_variable *global = createSharedVariable("Global");
-//	list_add(sharedVariables, a);
-//	list_add(sharedVariables, b);
-//	list_add(sharedVariables, c);
-//	list_add(sharedVariables, global);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
-//
-//	setSharedVariableValue("A", 1);
-//	setSharedVariableValue("B", 2);
-//	setSharedVariableValue("C", 3);
-//	setSharedVariableValue("Global", 112);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
-}
-
 void testSemaphores() {
 	// KERNEL SEMAPHORE TEST START
 	// TODO: remove semaphore test
