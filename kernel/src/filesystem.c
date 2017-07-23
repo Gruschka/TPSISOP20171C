@@ -7,11 +7,53 @@
 
 #include "filesystem.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <commons/log.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <netdb.h>
 
 extern t_log *logger;
+int fileSystem_sockfd;
+
+int fs_connectToFileSystem() {
+	struct sockaddr_in serv_addr;
+	struct hostent *server;
+
+	fileSystem_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (fileSystem_sockfd < 0) {
+		log_error(logger, "Error opening filesystem socket");
+		return -1;
+	}
+
+	server = gethostbyname("127.0.0.1");
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	bcopy((char *) server->h_addr,(char *)&serv_addr.sin_addr.s_addr, server->h_length);
+	serv_addr.sin_port = htons(5004);
+
+
+	if (connect(fileSystem_sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
+		log_error(logger, "Error connecting to fs");
+		return -1;
+	}
+
+	ipc_client_sendHandshake(KERNEL, fileSystem_sockfd);
+	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(fileSystem_sockfd);
+
+	if (response->success == 0) {
+		log_error(logger, "Error connecting to fs");
+		return -1;
+	}
+
+	log_debug(logger, "[fileSystem] connected. block size: %d", response->info);
+
+	return 0;
+}
 
 //TODO: Cuando agrego una entrada nueva a ambas estructuras, incrementar el anterior y no usar el indice para el fd
 
@@ -59,12 +101,80 @@ void fs_init() {
 	fs_globalFileTable->entries = list_create();
 	pthread_mutex_init(&(fs_globalFileTable->mutex), 0);
 
+	fs_connectToFileSystem();
+
 	fs_processFileTables = list_create();
+}
+
+int fs_createFile(int pid, char *path){
+	ipc_struct_fileSystem_create_file request;
+	request.header.operationIdentifier = FILESYSTEM_CREATE_FILE;
+	request.pathLength = strlen(path) +1;
+	char *pathCopy = strdup(path);
+
+	int bufferSize = sizeof(ipc_header) + sizeof(int) + request.pathLength;
+	char *buffer = malloc(bufferSize);
+	int bufferOffset = 0;
+	memset(buffer,0,bufferSize);
+
+	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pathLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,pathCopy,request.pathLength);
+	bufferOffset += sizeof(int);
+
+	send(fileSystem_sockfd,buffer,bufferSize,0);
+
+	free(pathCopy);
+	ipc_struct_fileSystem_create_file_response response;
+	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_create_file_response), 0);
+
 }
 
 int fs_openFile(int pid, char *path, char *permissionsString) {
 	fs_permission_flags permissionFlags = permissions(permissionsString);
 	fs_pft *pft = pft_findOrCreate(pid);
+
+	int bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(path) +1 ;
+	char *buffer = malloc(bufferSize);
+	memset(buffer,0,bufferSize);
+	int bufferOffset = 0;
+	ipc_struct_fileSystem_validate_file *request = malloc(sizeof(ipc_struct_fileSystem_validate_file));
+
+	request->header.operationIdentifier = FILESYSTEM_VALIDATE_FILE;
+	request->pathLength = strlen(path)+1;
+
+	char *pathCopy = strdup(path);
+
+	memcpy(buffer+bufferOffset,&request->header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	ipc_header test;
+	memcpy(&test,buffer,sizeof(ipc_header));
+
+	memcpy(buffer+bufferOffset,&request->pathLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset,pathCopy,strlen(path)+1);
+	bufferOffset += strlen(path)+1;
+
+	send(fileSystem_sockfd, buffer, bufferSize, 0);
+
+	free(request);
+
+	ipc_struct_fileSystem_validate_file_response response;
+	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_validate_file_response), 0);
+
+	if(response.status == EXIT_FAILURE){
+		if(permissionFlags.create){
+			fs_createFile(pid,path);
+		}else{
+			return EXIT_FAILURE;
+		}
+	}
 
 	return pft_addEntry(pft, pid, path, permissionFlags);
 }
@@ -89,8 +199,25 @@ void *fs_readFile(int pid, int fd, int offset, int size) {
 	// TODO: Pedirle la data al FS
 	char *path = fs_getPath(fd, pid);
 	log_debug(logger, "fs_readfile. path: %s", path);
-	void *buffer = malloc(size);
-	memset(buffer, '-', size);
+
+	ipc_struct_fileSystem_read_file request;
+	request.header.operationIdentifier = FILESYSTEM_READ_FILE;
+	request.pathLength = strlen(path) + 1;
+
+	request.offset = offset;
+	request.size = size;
+
+	int bufferSize = sizeof(ipc_header) + (3*sizeof(int)) + request.pathLength;
+	char *buffer = malloc(bufferSize);
+
+	send(fileSystem_sockfd,buffer,bufferSize,0);
+
+	free(buffer);
+
+	ipc_struct_fileSystem_read_file_response response;
+	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_read_file_response), 0);
+
+
 	return buffer;
 }
 
@@ -115,6 +242,7 @@ void fs_closeFile(int pid, int fd) {
 
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer) {
 	// TODO: Escribir la data en el FS
+
 }
 
 // Debug
@@ -284,3 +412,5 @@ char *fs_getPath(int fd, int pid) {
 
 	return entry->gftEntry->path;
 }
+
+
