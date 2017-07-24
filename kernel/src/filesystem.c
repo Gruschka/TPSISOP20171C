@@ -215,10 +215,13 @@ void *fs_readFile(int pid, int fd, int offset, int size) {
 	free(buffer);
 
 	ipc_struct_fileSystem_read_file_response response;
-	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_read_file_response), 0);
+	recv(fileSystem_sockfd, &response.header, sizeof(ipc_header), 0);
 
+	recv(fileSystem_sockfd, &response.bufferSize, sizeof(int), 0);
 
-	return buffer;
+	recv(fileSystem_sockfd, &response.buffer, response.bufferSize, 0);
+
+	return response.buffer;
 }
 
 void fs_closeFile(int pid, int fd) {
@@ -242,6 +245,51 @@ void fs_closeFile(int pid, int fd) {
 
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer) {
 	// TODO: Escribir la data en el FS
+	// TODO: Pedirle la data al FS
+	char *path = fs_getPath(fd, pid);
+	log_debug(logger, "fs_write. path: %s content: %s", path, (char *)buffer);
+
+	ipc_struct_fileSystem_write_file request;
+	request.header.operationIdentifier = FILESYSTEM_WRITE_FILE;
+	request.pathLength = strlen(path) + 1;
+	request.offset = offset;
+	request.size = size;
+
+	char *bufferCopy = malloc(size);
+	memset(bufferCopy,0,size);
+
+	memcpy(bufferCopy,buffer,size);
+
+
+	int bufferSize = sizeof(ipc_header) + (3*sizeof(int)) + request.pathLength + size;
+	int bufferOffset = 0;
+
+	char *sendBuffer = malloc(bufferSize);
+
+	memcpy(sendBuffer+bufferOffset,&request.header,sizeof(ipc_header));
+	bufferOffset += sizeof(ipc_header);
+
+	memcpy(sendBuffer+bufferOffset,&request.pathLength,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(sendBuffer+bufferOffset,path,request.pathLength);
+	bufferOffset += request.pathLength;
+
+	memcpy(sendBuffer+bufferOffset,&request.offset,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(sendBuffer+bufferOffset,&request.size,sizeof(int));
+	bufferOffset += sizeof(int);
+
+	memcpy(sendBuffer+bufferOffset,bufferCopy,size);
+	bufferOffset += size;
+
+	send(fileSystem_sockfd,sendBuffer,bufferSize,0);
+
+	free(buffer);
+
+	ipc_struct_fileSystem_write_file_response response;
+	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_write_file_response), 0);
 
 }
 

@@ -360,6 +360,7 @@ typedef struct fileSystem_read_file {
 
 typedef struct fileSystem_read_file_response {
 	ipc_header header;
+	int bufferSize;
 	char *buffer;
 } __attribute__((packed)) ipc_struct_fileSystem_read_file_response;
 

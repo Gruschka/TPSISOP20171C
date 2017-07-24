@@ -353,14 +353,12 @@ int main(int argc, char **argv) {
 	initSharedVariables();
 	initSemaphores();
 
-	extern void testFS();
+//	extern void testFS();
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
 
 	fs_init();
-
-	fs_openFile(1,"cacaculopedopis","rwc");
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -631,14 +629,24 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 
 	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
 	{ // Desfragmentación
-//		heap_metadata *metadata = NULL;
+//		heap_metadata *leftMetadata = NULL;
+//		heap_metadata *rightMetadata = page;
 //
 //		int offset;
 //		for (offset = 0; offset < pageSize;) {
-//			heap_metadata *m = page + offset;
-//			if (m->isFree == 1 && m->size >= (neededSize + sizeof(heap_metadata))) {
-//				metadata = m;
-//				break;
+//			if (offset + sizeof(heap_metadata) + rightMetadata->size < pageSize) {
+//				leftMetadata = rightMetadata;
+//				rightMetadata = page + offset
+//			}
+//
+//			if (rightMetadata == NULL) {
+//				offset + sizeof(heap_metadata) + m->size
+//			} else {
+//				leftMetadata = rightMetadata;
+//			}
+//
+//			if (m->isFree == 1) {
+//
 //			}
 //
 //			offset = offset + sizeof(heap_metadata) + m->size;
