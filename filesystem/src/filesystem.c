@@ -885,7 +885,6 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	return EXIT_SUCCESS;
 
 }
-
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa por ahora - dice si un bloque esta contenido por un archivo
 
 	FILE *filePointer = fopen(filePath, "r+");
@@ -908,17 +907,14 @@ int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa po
 	return EXIT_FAILURE;
 
 }
-
 void kernelServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 	kernelFileDescriptor = fd;
 }
-
 void kernelServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 
 }
-
 void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
@@ -944,7 +940,7 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 	case FILESYSTEM_CREATE_FILE: {
 		puts("FILESYSTEM_CREATE_FILE");
 		ipc_struct_fileSystem_create_file *request = buffer;
-		ipc_struct_fileSystem_validate_file_response response;
+		ipc_struct_fileSystem_create_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_CREATE_FILE_RESPONSE;
 
 		fs_createFile(request->path);
@@ -961,10 +957,39 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 	}
 	case FILESYSTEM_READ_FILE: {
 		puts("FILESYSTEM_READ_FILE");
+		ipc_struct_fileSystem_read_file *request = buffer;
+		ipc_struct_fileSystem_read_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_READ_FILE_RESPONSE;
+
+		response.buffer = fs_readFile(request->path,request->offset,request->size);
+		response.bufferSize = request->size;
+
+		int bufferSize = sizeof(ipc_header) + sizeof(int) + request->size;
+		int bufferOffset = 0;
+		char *buffer = malloc(bufferSize);
+		memset(buffer,0,bufferSize);
+
+		memcpy(buffer+bufferOffset,&response.header,sizeof(ipc_header));
+		bufferOffset += sizeof(ipc_header);
+
+		memcpy(buffer+bufferOffset,&response.bufferSize,sizeof(int));
+		bufferOffset += sizeof(int);
+
+		memcpy(buffer+bufferOffset,response.buffer,request->size);
+		bufferOffset += request->size;
+
+		send(kernelFileDescriptor,buffer,bufferSize,0);
+
 		break;
 	}
 	case FILESYSTEM_WRITE_FILE: {
 		puts("FILESYSTEM_WRITE_FILE");
+		ipc_struct_fileSystem_write_file *request = buffer;
+		ipc_struct_fileSystem_write_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
+
+		fs_writeFile(request->path,request->offset,request->size,request->buffer);
+
 		break;
 	}
 	default:
