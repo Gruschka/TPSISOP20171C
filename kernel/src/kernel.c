@@ -353,14 +353,12 @@ int main(int argc, char **argv) {
 	initSharedVariables();
 	initSemaphores();
 
-	extern void testFS();
+//	extern void testFS();
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
 
 	fs_init();
-
-	fs_openFile(1,"cacaculopedopis","rwc");
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
