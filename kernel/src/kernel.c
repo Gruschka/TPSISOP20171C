@@ -617,17 +617,37 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		return 0;
 	}
 
-	heap_metadata *metadata = page + offset - sizeof(heap_metadata);
-	if (metadata->isFree == 1) {
-		// La metadata ya estaba disponible, es un error
-		//fixme manejar error
-		free(page);
-		return 0;
+	{ // Liberamos el bloque
+		heap_metadata *metadata = page + offset - sizeof(heap_metadata);
+		if (metadata->isFree == 1) {
+			// La metadata ya estaba disponible, es un error
+			//fixme manejar error
+			free(page);
+			return 0;
+		}
+
+		metadata->isFree = 1;
 	}
 
-	metadata->isFree = 1;
-
 	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
+	{ // Desfragmentación
+//		heap_metadata *metadata = NULL;
+//
+//		int offset;
+//		for (offset = 0; offset < pageSize;) {
+//			heap_metadata *m = page + offset;
+//			if (m->isFree == 1 && m->size >= (neededSize + sizeof(heap_metadata))) {
+//				metadata = m;
+//				break;
+//			}
+//
+//			offset = offset + sizeof(heap_metadata) + m->size;
+//		}
+	}
+
+	{ // Liberamos página cuando queda sin usar
+
+	}
 
 	free(page);
 	return 1;
