@@ -453,7 +453,7 @@ int fs_deleteBlockFile(int blockNumber) {
 			+ fs_getNumberOfDigits(blockNumber) + strlen(".bin") + 1;
 	fileName = malloc(fileNameLength);
 
-	sprintf(fileName, "%s%d.bin\n", myFS.dataDirectoryPath, blockNumber);
+	sprintf(fileName, "%s%d.bin", myFS.dataDirectoryPath, blockNumber);
 
 	remove(fileName);
 	free(fileName);
@@ -1105,6 +1105,8 @@ int main(int argc, char **argv) {
 	puts(read);
 	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
 		puts(read);
+
+	fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 
 	return EXIT_SUCCESS;
