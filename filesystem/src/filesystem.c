@@ -389,23 +389,25 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer) {
 	return output;
 
 }
-int fs_validateFile(char *path) { //Se fija si un path existe
+int fs_validateFile(char *file) { //Se fija si un path existe
 	FILE *fileDescriptor;
-	if (fileDescriptor = fopen(path, "r+")) {
+
+	char *fullPath = fs_getFullPathFromFileName(file);
+
+	if (fileDescriptor = fopen(fullPath, "r+")) {
 		close(fileDescriptor);
 		return EXIT_SUCCESS;
 	} else {
 		close(fileDescriptor);
 		return EXIT_FAILURE;
 	}
+
 }
 int fs_createFile(char *path) { //Crea archivo nuevo
 	FILE *newFileDescriptor;
 	size_t firstFreeBlock;
 	char bloques[50];
 	memset(bloques, 0, 50);
-
-
 
 	if (fs_validateFile(path)) { //Si el archivo no existe
 		newFileDescriptor = fopen(path, "w+"); //Crea archivo Metadata del archivo nuevo
@@ -910,17 +912,14 @@ int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa po
 	return EXIT_FAILURE;
 
 }
-
 void kernelServerSocket_handleNewConnection(int fd) {
 	log_info(logger, "New connection. fd: %d", fd);
 	kernelFileDescriptor = fd;
 }
-
 void kernelServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 
 }
-
 void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
 	switch (operationId) {
@@ -946,7 +945,7 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 	case FILESYSTEM_CREATE_FILE: {
 		puts("FILESYSTEM_CREATE_FILE");
 		ipc_struct_fileSystem_create_file *request = buffer;
-		ipc_struct_fileSystem_validate_file_response response;
+		ipc_struct_fileSystem_create_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_CREATE_FILE_RESPONSE;
 
 		fs_createFile(request->path);
@@ -963,16 +962,69 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 	}
 	case FILESYSTEM_READ_FILE: {
 		puts("FILESYSTEM_READ_FILE");
+		ipc_struct_fileSystem_read_file *request = buffer;
+		ipc_struct_fileSystem_read_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_READ_FILE_RESPONSE;
+
+		response.buffer = fs_readFile(request->path,request->offset,request->size);
+		response.bufferSize = request->size;
+
+		int bufferSize = sizeof(ipc_header) + sizeof(int) + request->size;
+		int bufferOffset = 0;
+		char *buffer = malloc(bufferSize);
+		memset(buffer,0,bufferSize);
+
+		memcpy(buffer+bufferOffset,&response.header,sizeof(ipc_header));
+		bufferOffset += sizeof(ipc_header);
+
+		memcpy(buffer+bufferOffset,&response.bufferSize,sizeof(int));
+		bufferOffset += sizeof(int);
+
+		memcpy(buffer+bufferOffset,response.buffer,request->size);
+		bufferOffset += request->size;
+
+		send(kernelFileDescriptor,buffer,bufferSize,0);
+
 		break;
 	}
 	case FILESYSTEM_WRITE_FILE: {
 		puts("FILESYSTEM_WRITE_FILE");
+		ipc_struct_fileSystem_write_file *request = buffer;
+		ipc_struct_fileSystem_write_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
+
+		fs_writeFile(request->path,request->offset,request->size,request->buffer);
+
 		break;
 	}
 	default:
 		break;
 	}
 }
+char *fs_getFullPathFromFileName(char *file){
+
+
+	int fileDirectoryPathLength = strlen(myFS.filesDirectoryPath);
+	int fileNameLength = strlen(file);
+
+	int fullPathLength = fileDirectoryPathLength + fileNameLength;
+
+	char *fullPath = malloc(fullPathLength);
+
+	memset(fullPath, 0, fullPathLength);
+
+	int offset = 0;
+
+	memcpy(fullPath+offset, myFS.filesDirectoryPath, fileDirectoryPathLength);
+
+	offset += fileDirectoryPathLength;
+
+	memcpy(fullPath+offset-1, file, fileNameLength);
+
+	return fullPath;
+
+}
+
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -991,25 +1043,18 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
 
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+	fs_validateFile("/prueba1.bin");
 
 
 	char *bafer = string_new();
 	//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
 	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
 
-	string_append(&bafer, "c");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 332287, strlen(bafer),
-			bafer);
-
-	fs_dump();
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 0, 129);
-
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 332287, 1);
 
 	return EXIT_SUCCESS;
 }
