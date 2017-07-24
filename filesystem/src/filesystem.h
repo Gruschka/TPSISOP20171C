@@ -80,6 +80,7 @@ char *fs_getBlockFilePath(int blockNumber);
 int fs_readFile(char * filePath, uint32_t offset, uint32_t size);
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber);
 void fs_connectToKernel();
+char *fs_getFullPathFromFileName(char *file);
 
 extern t_FS myFS;
 

@@ -32,6 +32,7 @@
 t_config *config;
 t_log *logger;
 t_FS myFS;
+
 int portno;
 int kernelFileDescriptor;
 int fs_loadConfig(t_FS *FS) { //Llena la estructura del FS segun el archivo config
@@ -388,15 +389,19 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer) {
 	return output;
 
 }
-int fs_validateFile(char *path) { //Se fija si un path existe
+int fs_validateFile(char *file) { //Se fija si un path existe
 	FILE *fileDescriptor;
-	if (fileDescriptor = fopen(path, "r+")) {
+
+	char *fullPath = fs_getFullPathFromFileName(file);
+
+	if (fileDescriptor = fopen(fullPath, "r+")) {
 		close(fileDescriptor);
 		return EXIT_SUCCESS;
 	} else {
 		close(fileDescriptor);
 		return EXIT_FAILURE;
 	}
+
 }
 int fs_createFile(char *path) { //Crea archivo nuevo
 	FILE *newFileDescriptor;
@@ -996,6 +1001,30 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		break;
 	}
 }
+char *fs_getFullPathFromFileName(char *file){
+
+
+	int fileDirectoryPathLength = strlen(myFS.filesDirectoryPath);
+	int fileNameLength = strlen(file);
+
+	int fullPathLength = fileDirectoryPathLength + fileNameLength;
+
+	char *fullPath = malloc(fullPathLength);
+
+	memset(fullPath, 0, fullPathLength);
+
+	int offset = 0;
+
+	memcpy(fullPath+offset, myFS.filesDirectoryPath, fileDirectoryPathLength);
+
+	offset += fileDirectoryPathLength;
+
+	memcpy(fullPath+offset-1, file, fileNameLength);
+
+	return fullPath;
+
+}
+
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -1014,25 +1043,18 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
 
-	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+	fs_validateFile("/prueba1.bin");
 
 
 	char *bafer = string_new();
 	//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
 	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
 
-	string_append(&bafer, "c");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 332287, strlen(bafer),
-			bafer);
-
-	fs_dump();
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 0, 129);
-
-	fs_readFile("/mnt/SADICA_FS/Archivos/prueba1.bin", 332287, 1);
 
 	return EXIT_SUCCESS;
 }
