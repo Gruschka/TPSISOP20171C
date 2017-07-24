@@ -34,6 +34,11 @@ typedef struct active_console {
 	int pid;
 } t_active_console;
 
+typedef struct globalFileTableRecord {
+	int fd;
+	int pid;
+} t_globalFileTableRecord;
+
 typedef struct t_CPU {
 	int fd;
 	bool isAvailable;

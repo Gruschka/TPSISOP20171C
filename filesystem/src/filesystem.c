@@ -27,11 +27,14 @@
 #include<netinet/in.h>
 #include<sys/socket.h>
 #include<sys/types.h>
+#include <ipc/ipc.h>
 
 t_config *config;
 t_log *logger;
 t_FS myFS;
+
 int portno;
+int kernelFileDescriptor;
 int fs_loadConfig(t_FS *FS) { //Llena la estructura del FS segun el archivo config
 
 	char *mount = config_get_string_value(config,"PUNTO_MONTAJE");
@@ -401,6 +404,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 	size_t firstFreeBlock;
 	char bloques[50];
 	memset(bloques, 0, 50);
+
+
 
 	if (fs_validateFile(path)) { //Si el archivo no existe
 		newFileDescriptor = fopen(path, "w+"); //Crea archivo Metadata del archivo nuevo
@@ -883,7 +888,6 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	return EXIT_SUCCESS;
 
 }
-
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa por ahora - dice si un bloque esta contenido por un archivo
 
 	FILE *filePointer = fopen(filePath, "r+");
@@ -907,6 +911,69 @@ int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa po
 
 }
 
+void kernelServerSocket_handleNewConnection(int fd) {
+	log_info(logger, "New connection. fd: %d", fd);
+	kernelFileDescriptor = fd;
+}
+
+void kernelServerSocket_handleDisconnection(int fd) {
+	log_info(logger, "New disconnection. fd: %d", fd);
+
+}
+
+void kernelServerSocket_handleDeserializedStruct(int fd,
+		ipc_operationIdentifier operationId, void *buffer) {
+	switch (operationId) {
+	case HANDSHAKE: {
+		ipc_struct_handshake *handshake = buffer;
+		log_info(logger, "Handshake received. Process identifier: %s",
+				processName(handshake->processIdentifier));
+		ipc_server_sendHandshakeResponse(fd, 1, 0);
+		break;
+	}
+	case FILESYSTEM_VALIDATE_FILE: {
+		puts("FILESYSTEM_VALIDATE_FILE");
+		ipc_struct_fileSystem_validate_file *request = buffer;
+		ipc_struct_fileSystem_validate_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_VALIDATE_FILE_RESPONSE;
+
+		response.status = fs_validateFile(request->path);
+
+		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_validate_file_response),0);
+
+		break;
+	}
+	case FILESYSTEM_CREATE_FILE: {
+		puts("FILESYSTEM_CREATE_FILE");
+		ipc_struct_fileSystem_create_file *request = buffer;
+		ipc_struct_fileSystem_validate_file_response response;
+		response.header.operationIdentifier = FILESYSTEM_CREATE_FILE_RESPONSE;
+
+		fs_createFile(request->path);
+
+		response.status = EXIT_SUCCESS;
+
+		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_create_file_response),0);
+
+		break;
+	}
+	case FILESYSTEM_DELETE_FILE: {
+		puts("FILESYSTEM_DELETE_FILE");
+		break;
+	}
+	case FILESYSTEM_READ_FILE: {
+		puts("FILESYSTEM_READ_FILE");
+		break;
+	}
+	case FILESYSTEM_WRITE_FILE: {
+		puts("FILESYSTEM_WRITE_FILE");
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
 
@@ -923,6 +990,9 @@ int main(int argc, char **argv) {
 	fs_loadConfig(&myFS);
 
 	fs_mount(&myFS);
+
+	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+
 
 
 	fs_createFile("/mnt/SADICA_FS/Archivos/prueba1.bin");

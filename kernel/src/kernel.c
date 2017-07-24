@@ -43,6 +43,7 @@ t_list *sharedVariables;
 t_list *cpusList; //TODO: Sincronizar acceso a esta lista
 t_list *semaphores; //TODO: Sincronizar acceso a esta lista
 t_list *activeConsoles;
+t_list *globalFileTable;
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -55,6 +56,7 @@ uint32_t pageSize = 256;
 uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
+int fileSystem_sockfd;
 
 //void sigintHandler(int sig_num)
 //{
@@ -355,6 +357,10 @@ int main(int argc, char **argv) {
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
+
+	fs_init();
+
+	fs_openFile(1,"cacaculopedopis","rwc");
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
