@@ -209,6 +209,42 @@ int ipc_createServer(char *port,
 			deserializedStructHandler(fd, writeFile->header.operationIdentifier, writeFile);
 			break;
 		}
+		case FILESYSTEM_VALIDATE_FILE: {
+			ipc_struct_fileSystem_validate_file *request = malloc(sizeof(ipc_struct_fileSystem_validate_file));
+
+			ipc_header *header = malloc(sizeof(ipc_header));
+			recv(fd, header, sizeof(ipc_header), 0);
+
+			int pathLength;
+			recv(fd, &pathLength, sizeof(int), 0);
+
+			request->path = malloc(pathLength);
+			recv(fd, request->path, pathLength, 0);
+
+			request->header = *header;
+			request->pathLength = pathLength;
+
+			deserializedStructHandler(fd, request->header.operationIdentifier, request);
+			break;
+		}
+		case FILESYSTEM_CREATE_FILE: {
+			ipc_struct_fileSystem_create_file *request = malloc(sizeof(ipc_struct_fileSystem_create_file));
+
+			ipc_header *header = malloc(sizeof(ipc_header));
+			recv(fd, header, sizeof(ipc_header), 0);
+
+			int pathLength;
+			recv(fd, &pathLength, sizeof(int), 0);
+
+			request->path = malloc(pathLength);
+			recv(fd, request->path, pathLength, 0);
+
+			request->header = *header;
+			request->pathLength = pathLength;
+
+			deserializedStructHandler(fd, request->header.operationIdentifier, request);
+			break;
+		}
 		case KERNEL_MOVE_FILE_CURSOR: {
 			ipc_struct_kernel_move_file_cursor *moveFileCursor = malloc(
 					sizeof(ipc_struct_kernel_read_file));

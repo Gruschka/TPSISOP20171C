@@ -43,6 +43,7 @@ t_list *sharedVariables;
 t_list *cpusList; //TODO: Sincronizar acceso a esta lista
 t_list *semaphores; //TODO: Sincronizar acceso a esta lista
 t_list *activeConsoles;
+t_list *globalFileTable;
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -55,6 +56,7 @@ uint32_t pageSize = 256;
 uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
+int fileSystem_sockfd;
 
 //void sigintHandler(int sig_num)
 //{
@@ -105,40 +107,6 @@ void initSemaphores() {
 		list_add(semaphores, sem);
 		log_debug(logger, "created semaphore: %s (value: %d)", sem->identifier, sem->count);
 	}
-}
-
-void testMemory() {
-	void *page = memory_createPage(pageSize);
-//	void *block = memory_addBlock(page, 50);
-	void *firstBlock = memory_addBlock(page, 200);
-	void *secondBlock = memory_addBlock(page, 35);
-	void *thirdBlock = memory_addBlock(page, 157);
-	void *fourthBlock = memory_addBlock(page, 43);
-
-	log_debug(logger, "fourthBlock: %p", fourthBlock);
-	memory_dumpPage(page);
-
-//	shared_variable *a = createSharedVariable("A");
-//	shared_variable *b = createSharedVariable("B");
-//	shared_variable *c = createSharedVariable("C");
-//	shared_variable *global = createSharedVariable("Global");
-//	list_add(sharedVariables, a);
-//	list_add(sharedVariables, b);
-//	list_add(sharedVariables, c);
-//	list_add(sharedVariables, global);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
-//
-//	setSharedVariableValue("A", 1);
-//	setSharedVariableValue("B", 2);
-//	setSharedVariableValue("C", 3);
-//	setSharedVariableValue("Global", 112);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
 }
 
 void testSemaphores() {
@@ -389,6 +357,10 @@ int main(int argc, char **argv) {
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
+
+	fs_init();
+
+	fs_openFile(1,"cacaculopedopis","rwc");
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
