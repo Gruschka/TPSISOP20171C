@@ -31,6 +31,7 @@
 t_config *config;
 t_log *logger;
 t_FS myFS;
+
 int portno;
 int fs_loadConfig(t_FS *FS) { //Llena la estructura del FS segun el archivo config
 
@@ -401,6 +402,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 	size_t firstFreeBlock;
 	char bloques[50];
 	memset(bloques, 0, 50);
+
+
 
 	if (fs_validateFile(path)) { //Si el archivo no existe
 		newFileDescriptor = fopen(path, "w+"); //Crea archivo Metadata del archivo nuevo
@@ -883,7 +886,6 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	return EXIT_SUCCESS;
 
 }
-
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa por ahora - dice si un bloque esta contenido por un archivo
 
 	FILE *filePointer = fopen(filePath, "r+");
