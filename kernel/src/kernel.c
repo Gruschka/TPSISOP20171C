@@ -627,33 +627,28 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		metadata->isFree = 1;
 	}
 
-	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
 	{ // Desfragmentación
-//		heap_metadata *leftMetadata = NULL;
-//		heap_metadata *rightMetadata = page;
-//
-//		int offset;
-//		for (offset = 0; offset < pageSize;) {
-//			if (offset + sizeof(heap_metadata) + rightMetadata->size < pageSize) {
-//				leftMetadata = rightMetadata;
-//				rightMetadata = page + offset
-//			}
-//
-//			if (rightMetadata == NULL) {
-//				offset + sizeof(heap_metadata) + m->size
-//			} else {
-//				leftMetadata = rightMetadata;
-//			}
-//
-//			if (m->isFree == 1) {
-//
-//			}
-//
-//			offset = offset + sizeof(heap_metadata) + m->size;
-//		}
+		heap_metadata *leftMetadata = NULL;
+		heap_metadata *rightMetadata = page;
+
+		int offset;
+		for (offset = 0; offset < pageSize;) {
+			if (leftMetadata != NULL && leftMetadata->isFree && rightMetadata->isFree) {
+				leftMetadata->size += rightMetadata->size;
+				break;
+			}
+
+			int nextPointerOffset = offset + sizeof(heap_metadata) + rightMetadata->size;
+			if (nextPointerOffset < pageSize) {
+				leftMetadata = rightMetadata;
+				rightMetadata = page + nextPointerOffset;
+			}
+
+			offset = nextPointerOffset;
+		}
 	}
 
-	{ // Liberamos página cuando queda sin usar
+	{ // FIXME: Liberamos página cuando queda sin usar
 
 	}
 
