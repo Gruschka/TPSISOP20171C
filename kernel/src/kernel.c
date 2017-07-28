@@ -634,7 +634,7 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		int offset;
 		for (offset = 0; offset < pageSize;) {
 			if (leftMetadata != NULL && leftMetadata->isFree && rightMetadata->isFree) {
-				leftMetadata->size += rightMetadata->size;
+				leftMetadata->size += sizeof(heap_metadata) + rightMetadata->size;
 				break;
 			}
 
@@ -648,8 +648,23 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		}
 	}
 
-	{ // FIXME: Liberamos página cuando queda sin usar
+	// Guardamos nuestros cambios locales en la memoria
+	ipc_client_sendMemoryWrite(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize, page);
 
+	{ // Liberamos página cuando queda sin usar
+		heap_metadata *firstMetadata = page;
+		if (firstMetadata->isFree && (firstMetadata->size == (pageSize - (2 * sizeof(heap_metadata))))) {
+			int i;
+			for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+				heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+				if (a->processID == assignment->processID && a->processPageNumber == assignment->processPageNumber) {
+					list_remove(heap_page_assignments_list, i);
+					free(a);
+					break;
+				}
+			}
+			memory_sendRemovePageFromProgram(assignment->processID, assignment->processPageNumber);
+		}
 	}
 
 	free(page);
