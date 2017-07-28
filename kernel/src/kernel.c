@@ -43,6 +43,7 @@ t_list *sharedVariables;
 t_list *cpusList; //TODO: Sincronizar acceso a esta lista
 t_list *semaphores; //TODO: Sincronizar acceso a esta lista
 t_list *activeConsoles;
+t_list *globalFileTable;
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -55,6 +56,7 @@ uint32_t pageSize = 256;
 uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
+int fileSystem_sockfd;
 
 //void sigintHandler(int sig_num)
 //{
@@ -105,40 +107,6 @@ void initSemaphores() {
 		list_add(semaphores, sem);
 		log_debug(logger, "created semaphore: %s (value: %d)", sem->identifier, sem->count);
 	}
-}
-
-void testMemory() {
-	void *page = memory_createPage(pageSize);
-//	void *block = memory_addBlock(page, 50);
-	void *firstBlock = memory_addBlock(page, 200);
-	void *secondBlock = memory_addBlock(page, 35);
-	void *thirdBlock = memory_addBlock(page, 157);
-	void *fourthBlock = memory_addBlock(page, 43);
-
-	log_debug(logger, "fourthBlock: %p", fourthBlock);
-	memory_dumpPage(page);
-
-//	shared_variable *a = createSharedVariable("A");
-//	shared_variable *b = createSharedVariable("B");
-//	shared_variable *c = createSharedVariable("C");
-//	shared_variable *global = createSharedVariable("Global");
-//	list_add(sharedVariables, a);
-//	list_add(sharedVariables, b);
-//	list_add(sharedVariables, c);
-//	list_add(sharedVariables, global);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
-//
-//	setSharedVariableValue("A", 1);
-//	setSharedVariableValue("B", 2);
-//	setSharedVariableValue("C", 3);
-//	setSharedVariableValue("Global", 112);
-//
-//	log_debug(logger, "sharedVariables: A: %d. B: %d. C: %d. D: %d",
-//			getSharedVariableValue("A"), getSharedVariableValue("B"),
-//			getSharedVariableValue("C"), getSharedVariableValue("D"));
 }
 
 void testSemaphores() {
@@ -385,10 +353,12 @@ int main(int argc, char **argv) {
 	initSharedVariables();
 	initSemaphores();
 
-	extern void testFS();
+//	extern void testFS();
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
+
+	fs_init();
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -645,17 +615,57 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		return 0;
 	}
 
-	heap_metadata *metadata = page + offset - sizeof(heap_metadata);
-	if (metadata->isFree == 1) {
-		// La metadata ya estaba disponible, es un error
-		//fixme manejar error
-		free(page);
-		return 0;
+	{ // Liberamos el bloque
+		heap_metadata *metadata = page + offset - sizeof(heap_metadata);
+		if (metadata->isFree == 1) {
+			// La metadata ya estaba disponible, es un error
+			//fixme manejar error
+			free(page);
+			return 0;
+		}
+
+		metadata->isFree = 1;
 	}
 
-	metadata->isFree = 1;
+	{ // Desfragmentación
+		heap_metadata *leftMetadata = NULL;
+		heap_metadata *rightMetadata = page;
 
-	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
+		int offset;
+		for (offset = 0; offset < pageSize;) {
+			if (leftMetadata != NULL && leftMetadata->isFree && rightMetadata->isFree) {
+				leftMetadata->size += sizeof(heap_metadata) + rightMetadata->size;
+				break;
+			}
+
+			int nextPointerOffset = offset + sizeof(heap_metadata) + rightMetadata->size;
+			if (nextPointerOffset < pageSize) {
+				leftMetadata = rightMetadata;
+				rightMetadata = page + nextPointerOffset;
+			}
+
+			offset = nextPointerOffset;
+		}
+	}
+
+	// Guardamos nuestros cambios locales en la memoria
+	ipc_client_sendMemoryWrite(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize, page);
+
+	{ // Liberamos página cuando queda sin usar
+		heap_metadata *firstMetadata = page;
+		if (firstMetadata->isFree && (firstMetadata->size == (pageSize - (2 * sizeof(heap_metadata))))) {
+			int i;
+			for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+				heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+				if (a->processID == assignment->processID && a->processPageNumber == assignment->processPageNumber) {
+					list_remove(heap_page_assignments_list, i);
+					free(a);
+					break;
+				}
+			}
+			memory_sendRemovePageFromProgram(assignment->processID, assignment->processPageNumber);
+		}
+	}
 
 	free(page);
 	return 1;

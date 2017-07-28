@@ -15,6 +15,7 @@
 #include <stdint.h>
 
 
+
 #define METADATA_DIR "/Metadata/";
 
 typedef struct metadata{
@@ -76,8 +77,12 @@ int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata); // aft
 int fs_getAmountOfFreeBlocks();
 char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size);
 char *fs_getBlockFilePath(int blockNumber);
-int fs_readFile(char * filePath, uint32_t offset, uint32_t size);
+char *fs_readFile(char * filePath, uint32_t offset, uint32_t size);
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber);
+void fs_connectToKernel();
+char *fs_getFullPathFromFileName(char *file);
+int fs_createSubDirectoriesFromFilePath(char *filePath);
+static void fs_createPreviousFolders(const char *dir);
 
 extern t_FS myFS;
 

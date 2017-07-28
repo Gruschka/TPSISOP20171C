@@ -58,7 +58,17 @@ typedef enum {
 	KERNEL_WRITE_FILE,
 	KERNEL_WRITE_FILE_RESPONSE,
 	KERNEL_READ_FILE,
-	KERNEL_READ_FILE_RESPONSE
+	KERNEL_READ_FILE_RESPONSE,
+	FILESYSTEM_VALIDATE_FILE,
+	FILESYSTEM_VALIDATE_FILE_RESPONSE,
+	FILESYSTEM_CREATE_FILE,
+	FILESYSTEM_CREATE_FILE_RESPONSE,
+	FILESYSTEM_DELETE_FILE,
+	FILESYSTEM_DELETE_FILE_RESPONSE,
+	FILESYSTEM_READ_FILE,
+	FILESYSTEM_READ_FILE_RESPONSE,
+	FILESYSTEM_WRITE_FILE,
+	FILESYSTEM_WRITE_FILE_RESPONSE
 } ipc_operationIdentifier;
 
 typedef enum {
@@ -307,6 +317,66 @@ typedef struct kernel_read_file_response {
 	ipc_header header;
 	char success;
 } __attribute__((packed)) ipc_struct_kernel_read_file_response;
+
+typedef struct fileSystem_validate_file {
+	ipc_header header;
+	int pathLength;
+	char *path;
+} __attribute__((packed)) ipc_struct_fileSystem_validate_file;
+
+typedef struct fileSystem_validate_file_response {
+	ipc_header header;
+	int status;
+} __attribute__((packed)) ipc_struct_fileSystem_validate_file_response;
+
+typedef struct fileSystem_create_file {
+	ipc_header header;
+	int pathLength;
+	char *path;
+} __attribute__((packed)) ipc_struct_fileSystem_create_file;
+
+typedef struct fileSystem_create_file_response {
+	ipc_header header;
+	int status;
+} __attribute__((packed)) ipc_struct_fileSystem_create_file_response;
+
+typedef struct fileSystem_delete_file {
+	ipc_header header;
+	char *path;
+} __attribute__((packed)) ipc_struct_fileSystem_delete_file;
+
+typedef struct fileSystem_delete_file_response {
+	ipc_header header;
+	int status;
+} __attribute__((packed)) ipc_struct_fileSystem_delete_file_response;
+
+typedef struct fileSystem_read_file {
+	ipc_header header;
+	int pathLength;
+	char *path;
+	int offset;
+	int size;
+} __attribute__((packed)) ipc_struct_fileSystem_read_file;
+
+typedef struct fileSystem_read_file_response {
+	ipc_header header;
+	int bufferSize;
+	char *buffer;
+} __attribute__((packed)) ipc_struct_fileSystem_read_file_response;
+
+typedef struct fileSystem_write_file {
+	ipc_header header;
+	int pathLength;
+	char *path;
+	int offset;
+	int size;
+	char *buffer;
+} __attribute__((packed)) ipc_struct_fileSystem_write_file;
+
+typedef struct fileSystem_write_file_response {
+	ipc_header header;
+	int bytesWritten;
+} __attribute__((packed)) ipc_struct_fileSystem_write_file_response;
 
 typedef struct cpu_execute_program {
 	ipc_header header;

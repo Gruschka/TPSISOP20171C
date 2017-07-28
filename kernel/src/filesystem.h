@@ -11,6 +11,7 @@
 #include <commons/collections/list.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <ipc/ipc.h>
 
 typedef enum operation {
 	CREATE, READ, WRITE
@@ -70,5 +71,6 @@ fs_gft_entry *gft_addEntry(char *path);
 void gft_removeEntry(fs_gft_entry *entry);
 fs_permission_flags permissions(char *permissionsString);
 char *fs_getPath(int fd, int pid);
+int fs_connectToFileSystem();
 
 #endif /* FILESYSTEM_H_ */
