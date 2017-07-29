@@ -158,16 +158,15 @@ int ipc_createServer(char *port,
 			char *path = malloc(pathLength);
 			recv(fd, path, pathLength, 0);
 
-			int read;
-			int write;
-			int creation;
-			recv(fd, &read, sizeof(int), 0);
-			recv(fd, &write, sizeof(int), 0);
-			recv(fd, &creation, sizeof(int), 0);
+			uint32_t pid;
+			recv(fd, &pid, sizeof(uint32_t), 0);
 
-			openFile->creation = creation;
-			openFile->read = read;
-			openFile->write = write;
+			char *flags = malloc(4*sizeof(char));
+			recv(fd, flags, 4*sizeof(char), 0);
+
+			strcpy(openFile->flags,flags);
+			free(flags);
+			openFile->pid = pid;
 			openFile->header = *header;
 			openFile->path = path;
 			openFile->pathLength = pathLength;

@@ -252,9 +252,8 @@ typedef struct kernel_open_file {
 	ipc_header header;
 	int pathLength;
 	char *path;
-	int read;
-	int write;
-	int creation;
+	int pid;
+	char flags[4];
 } __attribute__((packed)) ipc_struct_kernel_open_file;
 
 typedef struct kernel_open_file_response {

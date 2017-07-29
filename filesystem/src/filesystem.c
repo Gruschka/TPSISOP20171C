@@ -936,7 +936,7 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_validate_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_VALIDATE_FILE_RESPONSE;
 
-		response.status = fs_validateFile(request->path);
+		response.status = fs_validateFile(fs_getFullPathFromFileName(request->path));
 
 		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_validate_file_response),0);
 
@@ -948,7 +948,8 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_create_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_CREATE_FILE_RESPONSE;
 
-		fs_createFile(request->path);
+
+		fs_createFile(fs_getFullPathFromFileName(request->path));
 
 		response.status = EXIT_SUCCESS;
 
@@ -966,7 +967,7 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_read_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_READ_FILE_RESPONSE;
 
-		response.buffer = fs_readFile(request->path,request->offset,request->size);
+		response.buffer = fs_readFile(fs_getFullPathFromFileName(request->path),request->offset,request->size);
 		response.bufferSize = request->size;
 
 		int bufferSize = sizeof(ipc_header) + sizeof(int) + request->size;
@@ -993,7 +994,7 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_write_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
 
-		fs_writeFile(request->path,request->offset,request->size,request->buffer);
+		fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
 
 		break;
 	}
@@ -1043,7 +1044,7 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
 

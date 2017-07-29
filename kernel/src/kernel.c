@@ -360,7 +360,6 @@ int main(int argc, char **argv) {
 
 	fs_init();
 
-	fs_openFile(1,"cacaculopedopis","rwc");
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -809,7 +808,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 	}
 	case KERNEL_OPEN_FILE: {
 		ipc_struct_kernel_open_file *openFile = buffer;
-		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %d%d%d", openFile->path, openFile->creation, openFile->read, openFile->write);
+		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %s", openFile->path, openFile->flags);
 
 		//hardcodeado durlock
 		ipc_struct_kernel_open_file_response response;
@@ -817,7 +816,11 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.success = 1;
 		response.fileDescriptor = 22;
 
+		fs_openFile(openFile->pid,openFile->path,openFile->flags);
+
 		send(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
+
+
 		break;
 	}
 	case KERNEL_WRITE_FILE: {
@@ -828,7 +831,9 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.header.operationIdentifier = KERNEL_WRITE_FILE_RESPONSE;
 		response.success = 1;
 
+
 		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
+
 		break;
 	}
 	case KERNEL_READ_FILE: {

@@ -102,12 +102,12 @@ void cpu_writeMemory(int pid, int page, int offset, int size, void *buffer) {
 }
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
-	CPU->connections[T_KERNEL].host = "10.0.1.144";
+	CPU->connections[T_KERNEL].host = "127.0.0.1";
 	CPU->connections[T_KERNEL].portNumber = 5001;
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "10.0.1.144";
+	CPU->connections[T_MEMORY].host = "127.0.0.1";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -493,18 +493,41 @@ ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t poin
 	return response;
 
 }
+
+char *cpu_getFlagsStringFromFlags(t_flags flags){
+	char *output = malloc(sizeof(char)*4);
+	int iterator = 0;
+
+	if(flags.read){
+		output[iterator]='r';
+		iterator++;
+	}
+
+	if(flags.write){
+		output[iterator]='w';
+		iterator++;
+	}
+
+	if(flags.creation){
+		output[iterator]='c';
+		iterator++;
+	}
+
+	output[iterator] = '\0';
+	return output;
+}
+
 ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
-	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1 - sizeof(int);
+	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1 - (sizeof(int));
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
+	char *flagsBuffer = cpu_getFlagsStringFromFlags(flags);
 
 	int bufferOffset = 0;
 	ipc_struct_kernel_open_file request;
 
 	request.header.operationIdentifier = KERNEL_OPEN_FILE;
-	request.creation = flags.creation;
-	request.read = flags.read;
-	request.write = flags.write;
+
 	request.pathLength = strlen(path)+1;
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
@@ -518,14 +541,11 @@ ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, 
 	bufferOffset += request.pathLength;
 	free(pathCopy);
 
-	memcpy(buffer+bufferOffset,&request.read,sizeof(int));
-	bufferOffset += sizeof(int);
+	memcpy(buffer+bufferOffset,&myCPU.assignedPCB->pid,sizeof(uint32_t));
+	bufferOffset += sizeof(uint32_t);
 
-	memcpy(buffer+bufferOffset,&request.write,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.creation,sizeof(int));
-	bufferOffset += sizeof(int);
+	memcpy(buffer+bufferOffset,flagsBuffer,4*sizeof(char));
+	bufferOffset += 4*sizeof(char);
 
 	send(fd, buffer, bufferSize, 0);
 
