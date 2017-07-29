@@ -657,10 +657,10 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 		temporalBuffer = malloc(temporalBufferSize + 1);
 		memset(temporalBuffer, 0, temporalBufferSize + 1);
 		memcpy(temporalBuffer, buffer + amountWritten, temporalBufferSize);
-		amountWritten += strlen(temporalBuffer);
+		amountWritten += temporalBufferSize;
 
 		fputs(temporalBuffer, blockFilePointer);
-		sizeRemainingToWrite -= strlen(temporalBuffer);
+		sizeRemainingToWrite -= amountWritten;
 
 		free(temporalBuffer);
 		fclose(blockFilePointer);
@@ -774,9 +774,9 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 	char *fileName = fs_getBlockFilePath(blockNumberToRead);
 
 	FILE * blockFilePointer = fs_openBlockFile(blockNumberToRead);
-	int sizeToRead = sizeof(char) * size;
+	int sizeToRead = size;
 	int error = 0;
-	char * readValues = malloc(sizeToRead);
+	char * readValues = malloc(size);
 
 	memset(readValues, 0, sizeToRead);
 
@@ -798,7 +798,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
 	
 
-	error = fgets(readValues, size + 1, blockFilePointer);
+	error = fgets(readValues, size, blockFilePointer);
 
 	if (error == NULL) {
 		log_error(logger,
@@ -807,7 +807,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 	}
 
 	printf("Reading %d bytes with %d offset from block %d : %s \n",
-			strlen(readValues), offset, blockNumberToRead, readValues);
+			size, offset, blockNumberToRead, readValues);
 
 	fclose(blockFilePointer);
 
@@ -834,7 +834,7 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 		return -1;
 	}
 
-	char *readValues = malloc(size + 1);
+	char *readValues = malloc(size);
 	memset(readValues, 0, size);
 
 	FILE *filePointer = fopen(filePath, "r+");
@@ -877,7 +877,7 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 			// jump to next block
 			currentBlockIndex++;
 			currentBlock = fileMetadata.blocks[currentBlockIndex];
-			offsetBuffer += strlen(buffer);
+			offsetBuffer += size - bytesRemainingToRead;
 			bytesUntilEndOfBlock = myFS.metadata.blockSize;
 			readOffset = 0;
 
@@ -891,7 +891,7 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 			char *lastChar = readValues + offsetBuffer + bytesRemainingToRead;
 			lastChar[0] = '\0';
 			bytesRemainingToRead = 0;
-			offsetBuffer += strlen(buffer);
+			offsetBuffer += size - bytesRemainingToRead;
 			break;
 
 		}
@@ -1105,31 +1105,28 @@ int main(int argc, char **argv) {
 	fs_loadConfig(&myFS);
 
 	fs_mount(&myFS);
-
+//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/largeFile.bin", 0, 65);
+//		puts(read);
 	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
-	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+//	fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 //	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 //	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
 //
 //	fs_validateFile("/prueba1.bin");
-<<<<<<< HEAD
-
-
-=======
 //
 //
->>>>>>> branch 'master' of git@github.com:sisoputnfrba/tp-2017-1c-Deus-Vult.git
-//	char *bafer = string_new();
-//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+//char *bafer = string_new();
+//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
 //	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 128);
 //	puts(read);
 //	free(read);
 //	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
 //	free(read);
 //    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+
 
 	return EXIT_SUCCESS;
 
