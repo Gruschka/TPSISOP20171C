@@ -72,3 +72,5 @@ process_memory_dump.txt
 build/
 ansisop-parser/
 so-commons-library/
+/ansisop-parser/
+/so-commons-library/
