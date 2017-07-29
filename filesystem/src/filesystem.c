@@ -796,6 +796,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 
 	fflush(stdin);
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
+	
 
 	error = fgets(readValues, size + 1, blockFilePointer);
 
@@ -1113,8 +1114,7 @@ int main(int argc, char **argv) {
 //	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
 //
 //	fs_validateFile("/prueba1.bin");
-//
-//
+
 //	char *bafer = string_new();
 //	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
 //	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
