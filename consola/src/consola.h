@@ -20,18 +20,19 @@ typedef struct t_process {
 	pthread_t threadID;
 	uint32_t processId;
 	int kernelSocket,consoleImpressions;
-	time_t startTime,endTime;
-	struct t_process * processMemoryAddress;
+	time_t startTime;
+	time_t endTime;
 } t_process;
 
 
 
 void showMenu();
 void startProgram(char * programPath);
-int requestPid();
-t_process *getThreadfromPid(int aPid);
+int requestPidFromUser();
+t_process *getProcessForPid(int aPid);
 int getIndexFromTid(pthread_t tid);
-void endProgram(int pid);
+void endProgramForPid(int pid);
+void endProgram(t_process *process);
 void disconnectConsole();
 void clearConsole();
 void requestFilePath(char *filePath);
@@ -40,7 +41,7 @@ void connectToKernel(char * program);
 int parser_getAnSISOPFromFile(char *name, void **buffer);
 void dump_buffer(void *buffer, int size);
 void showCurrentThreads();
-int noThreadsInExecution();
+int threadsListIsEmpty();
 void showFinishedThreadInfo(t_process * aProcess);
 void programThread_sig_handler(int signo);
 
