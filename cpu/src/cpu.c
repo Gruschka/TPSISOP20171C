@@ -102,12 +102,12 @@ void cpu_writeMemory(int pid, int page, int offset, int size, void *buffer) {
 }
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
-	CPU->connections[T_KERNEL].host = "10.0.1.144";
+	CPU->connections[T_KERNEL].host = "127.0.0.1";
 	CPU->connections[T_KERNEL].portNumber = 5001;
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "10.0.1.144";
+	CPU->connections[T_MEMORY].host = "127.0.0.1";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -493,7 +493,7 @@ ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t poin
 	return response;
 
 }
-ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, t_flags flags){
+ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, int pid, char *path, t_flags flags){
 	int bufferSize = sizeof(ipc_struct_kernel_open_file) + strlen(path)+1 - sizeof(int);
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
@@ -502,6 +502,7 @@ ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, 
 	ipc_struct_kernel_open_file request;
 
 	request.header.operationIdentifier = KERNEL_OPEN_FILE;
+	request.pid = pid;
 	request.creation = flags.creation;
 	request.read = flags.read;
 	request.write = flags.write;
@@ -509,6 +510,9 @@ ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, 
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset, &request.pid, sizeof(int));
+	bufferOffset += sizeof(int);
 
 	memcpy(buffer+bufferOffset,&request.pathLength,sizeof(int));
 	bufferOffset += sizeof(int);
@@ -596,6 +600,7 @@ ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd,
 	request.header.operationIdentifier = KERNEL_MOVE_FILE_CURSOR;
 	request.fileDescriptor = fileDescriptor;
 	request.position = position;
+	request.pid = myCPU.assignedPCB->pid;
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
@@ -605,6 +610,8 @@ ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd,
 
 	memcpy(buffer+bufferOffset,&request.position,sizeof(int));
 	bufferOffset += sizeof(int);
+
+	memcpy(buffer+bufferOffset, &request.pid, sizeof(uint32_t));
 
 	send(fd, buffer, bufferSize, 0);
 
@@ -716,7 +723,7 @@ void cpu_kernelFree(uint32_t pointer){
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
 	printf("kernelOpen\n");
-	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor,address,flags);
+	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor, myCPU.assignedPCB->pid, address,flags);
 
 	fflush(stdout);
 	return response.fileDescriptor;

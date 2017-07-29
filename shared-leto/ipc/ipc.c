@@ -155,6 +155,10 @@ int ipc_createServer(char *port,
 			recv(fd, header, sizeof(ipc_header), 0);
 			readBytes += sizeof(ipc_header);
 
+			int pid;
+			recv(fd, &pid, sizeof(int), 0);
+			readBytes += sizeof(int);
+
 			int pathLength;
 			recv(fd, &pathLength, sizeof(int), 0);
 			readBytes += sizeof(int);
@@ -175,6 +179,7 @@ int ipc_createServer(char *port,
 			ioctl(fd, FIONREAD, &count);
 			log_debug(logger, "Datos pendientes: %d bytes. Leí: %d bytes", count, readBytes);
 
+			openFile->pid = pid;
 			openFile->creation = creation;
 			openFile->read = read;
 			openFile->write = write;

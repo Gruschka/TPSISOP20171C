@@ -64,11 +64,11 @@ void testFS() {
 //	fs_permission_flags rwFlags = { .create = 0, .read = 1, .write = 1 };
 //	fs_permission_flags rFlags = { .create = 0, .read = 1, .write = 0 };
 
-	fs_openFile(1, "/code/tp-sisop.sh", "r");
-	fs_openFile(0, "/code/tp-sisop.sh", "rw");
-	fs_openFile(0, "/dev/null", "rwc");
-	fs_openFile(0, "/notas.txt", "r");
-	fs_openFile(1, "/cursos/z1234/alumnos.zip", "r");
+	fs_openFile2(1, "/code/tp-sisop.sh", "r");
+	fs_openFile2(0, "/code/tp-sisop.sh", "rw");
+	fs_openFile2(0, "/dev/null", "rwc");
+	fs_openFile2(0, "/notas.txt", "r");
+	fs_openFile2(1, "/cursos/z1234/alumnos.zip", "r");
 
 	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: READ): %d", 1, 3, fs_isOperationAllowed(1, 3, READ));
 	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: WRITE): %d", 1, 3, fs_isOperationAllowed(1, 3, WRITE));
@@ -134,8 +134,7 @@ int fs_createFile(int pid, char *path){
 
 }
 
-int fs_openFile(int pid, char *path, char *permissionsString) {
-	fs_permission_flags permissionFlags = permissions(permissionsString);
+int fs_openFile(int pid, char *path, fs_permission_flags permissions) {
 	fs_pft *pft = pft_findOrCreate(pid);
 
 	int bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(path) +1 ;
@@ -169,14 +168,20 @@ int fs_openFile(int pid, char *path, char *permissionsString) {
 	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_validate_file_response), 0);
 
 	if(response.status == EXIT_FAILURE){
-		if(permissionFlags.create){
+		if(permissions.create){
 			fs_createFile(pid,path);
 		}else{
-			return EXIT_FAILURE;
+			return -1;
 		}
 	}
 
-	return pft_addEntry(pft, pid, path, permissionFlags);
+	return pft_addEntry(pft, pid, path, permissions);
+}
+
+int fs_openFile2(int pid, char *path, char *permissionsString) {
+	fs_permission_flags permissionFlags = permissions(permissionsString);
+
+	return fs_openFile(pid, path, permissionFlags);
 }
 
 int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
@@ -198,13 +203,15 @@ int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
 void *fs_readFile(int pid, int fd, int offset, int size) {
 	// TODO: Pedirle la data al FS
 	char *path = fs_getPath(fd, pid);
+	fs_pft *pft = pft_find(pid);
+	fs_pft_entry *entry = pft_findEntry(pft, fd);
 	log_debug(logger, "fs_readfile. path: %s", path);
 
 	ipc_struct_fileSystem_read_file request;
 	request.header.operationIdentifier = FILESYSTEM_READ_FILE;
 	request.pathLength = strlen(path) + 1;
 
-	request.offset = offset;
+	request.offset = entry->position + offset;
 	request.size = size;
 
 	int bufferSize = sizeof(ipc_header) + (3*sizeof(int)) + request.pathLength;
@@ -243,16 +250,23 @@ void fs_closeFile(int pid, int fd) {
 	}
 }
 
+void fs_moveCursor(int pid, int fd, int offset) {
+	fs_pft *pft = pft_find(pid);
+	fs_pft_entry *entry = pft_findEntry(pft, fd);
+
+	entry->position = offset;
+}
+
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer) {
-	// TODO: Escribir la data en el FS
-	// TODO: Pedirle la data al FS
 	char *path = fs_getPath(fd, pid);
 	log_debug(logger, "fs_write. path: %s content: %s", path, (char *)buffer);
+	fs_pft *pft = pft_find(pid);
+	fs_pft_entry *entry = pft_findEntry(pft, fd);
 
 	ipc_struct_fileSystem_write_file request;
 	request.header.operationIdentifier = FILESYSTEM_WRITE_FILE;
 	request.pathLength = strlen(path) + 1;
-	request.offset = offset;
+	request.offset = entry->position + offset;
 	request.size = size;
 
 	char *bufferCopy = malloc(size);
@@ -364,6 +378,7 @@ int pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags) {
 	entry->flags = flags;
 	entry->gftEntry = gft_findEntry(path);
 	entry->gftEntry->open++;
+	entry->position = 0;
 
 	int idx = list_size(pft->entries);
 	entry->fd = idx + 3; // los fd empiezan en 3

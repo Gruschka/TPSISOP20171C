@@ -250,6 +250,7 @@ typedef struct kernel_dealloc_heap_response {
 
 typedef struct kernel_open_file {
 	ipc_header header;
+	int pid;
 	int pathLength;
 	char *path;
 	int read;
@@ -287,6 +288,7 @@ typedef struct kernel_move_file_cursor {
 	ipc_header header;
 	int fileDescriptor;
 	int position;
+	int pid;
 } __attribute__((packed)) ipc_struct_kernel_move_file_cursor;
 
 typedef struct kernel_move_file_cursor_response {

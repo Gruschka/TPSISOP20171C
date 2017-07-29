@@ -29,6 +29,7 @@
 #include <commons/log.h>
 #include <parser/metadata_program.h>
 #include "semaphore.h"
+#include "filesystem.h"
 
 #define EVENT_SIZE  ( sizeof (struct inotify_event) )
 #define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
@@ -40,10 +41,11 @@ static t_config *__config;
 t_kernel_config *configuration;
 t_log *logger;
 t_list *sharedVariables;
-t_list *cpusList; //TODO: Sincronizar acceso a esta lista
-t_list *semaphores; //TODO: Sincronizar acceso a esta lista
+t_list *cpusList;
+t_list *semaphores;
 t_list *activeConsoles;
 t_list *globalFileTable;
+t_list *processesToKill;
 
 pthread_t consolesServerThread;
 pthread_t cpusServerThread;
@@ -57,15 +59,6 @@ uint32_t stackSize = 2; // FIXME: levantar de archivo de config
 
 int memory_sockfd;
 int fileSystem_sockfd;
-
-//void sigintHandler(int sig_num)
-//{
-//    /* Reset handler to catch SIGINT next time.
-//       Refer http://en.cppreference.com/w/c/program/signal */
-//    signal(SIGINT, sigintHandler);
-//    printf("\n Cannot be terminated using Ctrl+C \n");
-//    fflush(stdout);
-//}
 
 void semaphoreDidBlockProcess(t_PCB *pcb, char *identifier) {
 	log_debug(logger, "[semaphore: %s] Process<PID:%d> did block", identifier, pcb->pid);
@@ -349,6 +342,7 @@ int main(int argc, char **argv) {
 	sharedVariables = list_create();
 	cpusList = list_create();
 	semaphores = list_create();
+	processesToKill = list_create();
 
 	initSharedVariables();
 	initSemaphores();
@@ -814,6 +808,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			pthread_mutex_lock(&execList_mutex);
 			markCPUAsFree(fd);
 			list_takePCB(execList, waitPCB->pid);
+			blockQueue_addProcess(waitPCB);
 			pthread_mutex_unlock(&execList_mutex);
 		}
 		break;
@@ -829,11 +824,13 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_open_file *openFile = buffer;
 		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %d%d%d", openFile->path, openFile->creation, openFile->read, openFile->write);
 
-		//hardcodeado durlock
+		fs_permission_flags flags = { openFile->creation, openFile->read, openFile->write };
+		int fileDescriptor = fs_openFile(openFile->pid, openFile->path, flags);
+
 		ipc_struct_kernel_open_file_response response;
 		response.header.operationIdentifier = KERNEL_OPEN_FILE_RESPONSE;
 		response.success = 1;
-		response.fileDescriptor = 22;
+		response.fileDescriptor = fileDescriptor;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
 		break;
@@ -858,6 +855,8 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 	}
 	case KERNEL_MOVE_FILE_CURSOR: {
 		ipc_struct_kernel_move_file_cursor *moveFileCursor = buffer;
+		log_debug(logger, "KERNEL_MOVE_FILE_CURSOR: FD: %d. PID: %d. Position: %d", moveFileCursor->fileDescriptor, moveFileCursor->pid, moveFileCursor->position);
+		fs_moveCursor(moveFileCursor->pid, moveFileCursor->fileDescriptor, moveFileCursor->position);
 		break;
 	}
 	default:
@@ -1043,15 +1042,23 @@ void finishProgram(int pid, int exitCode) {
 
 	pthread_mutex_lock(&readyQueue_mutex);
 	pcb = list_takePCB(readyQueue, pid);
-	pthread_mutex_unlock(&readyQueue_mutex);
-	if (pcb != NULL) {
+	if (pcb != NULL) { // si estaba en readyqueue
+		int readyQueueProgramsCount;
+		sem_getvalue(&readyQueue_programsCount, &readyQueueProgramsCount);
+		if (readyQueueProgramsCount > 0) {
+			sem_wait(&readyQueue_programsCount); // disminuyo la cantidad de programas en ready
+		}
+		sem_post(&readyQueue_availableSpaces); // aumento en 1 los lugares disponibles
 		return;
 	}
+	pthread_mutex_unlock(&readyQueue_mutex);
 
 	pthread_mutex_lock(&execList_mutex);
 	pcb = list_takePCB(execList, pid);
-	pthread_mutex_unlock(&readyQueue_mutex);
-	if (pcb != NULL) {
+
+	if (pcb != NULL) { // si estaba en exec
+		// lo agrego a la lista de procesos a matar
 		return;
 	}
+	pthread_mutex_unlock(&execList_mutex);
 }
