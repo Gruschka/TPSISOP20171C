@@ -35,7 +35,6 @@ t_list * processList;
 
 
 int main(int argc, char **argv) {
-
 	char *logFile = tmpnam(NULL);
 	logger = log_create(logFile, "CONSOLE", 1, LOG_LEVEL_DEBUG);
 
@@ -60,7 +59,6 @@ int main(int argc, char **argv) {
 void showMenu() {
 
 	int menuopt;
-	int unPid;
 	printf("\nConsole Menu:\n");
 
 	char program[50];
@@ -76,8 +74,8 @@ void showMenu() {
 			break;
 		}
 		case 2: {						 //End Program
-			unPid = requestPid();
-			endProgram(unPid);
+			int pid = requestPidFromUser();
+			endProgramForPid(pid);
 			break;
 		}
 		case 3: {						 //Disconnect Program
@@ -98,9 +96,8 @@ void showMenu() {
 		}
 	} while (menuopt != 6);
 }
+
 void startProgram(char * programPath) {
-
-
 	printf("\nInitiating:%s\n", programPath);
 
 	//Thread ID
@@ -115,13 +112,10 @@ void startProgram(char * programPath) {
 
 	//Create thread
 	pthread_create(&threadId, &attr, executeProgram, programPath);
-
-
-
 }
 
 
-int requestPid() {
+int requestPidFromUser() {
 	int pid;
 	printf("\nEnter pid:\n");
 	scanf("%d", &pid);
@@ -130,7 +124,7 @@ int requestPid() {
 }
 
 //Funcion utilizada para obtener un proceso de la lista
-t_process *getThreadfromPid(int aPid) {
+t_process *getProcessForPid(int aPid) {
 
 	t_process * aux = NULL;
 	int threadListSize = list_size(processList);
@@ -170,55 +164,33 @@ int getIndexFromTid(pthread_t tid) {
 
 }
 
-
-void endProgram(int pid) {
-	int result;
-
-	if (noThreadsInExecution() == 1) {
-		printf("No threads currently in execution - End Program not available\n");
-		return; //Si no hay hilos en ejecucion corta
-	}
-
-	t_process *threadToKill = getThreadfromPid(pid);
-
-
-	if (getThreadfromPid(pid) == NULL) {
+void endProgramForPid(int pid) {
+	t_process *process = getProcessForPid(pid);
+	if (process == NULL) {
 		printf("No thread with such pid could be found - End Program aborted\n");
 		return; //Si el pid ingresado no existe dentro de la lista de procesos
 	}
 
+	endProgram(process);
+	signal(SIGUSR1, programThread_sig_handler);
+	pthread_kill(process->threadID, SIGUSR1);
+	free(process);
+}
 
+void endProgram(t_process *process) {
 	//Saves the time on which the process was forced to stop execution (considering the instant previous to send the finish program notification).
-	threadToKill->endTime = time(NULL);
+	process->endTime = time(NULL);
 
-	int indexOfRemovedThread = getIndexFromTid(threadToKill->threadID);
-	ipc_client_sendFinishProgram(threadToKill->kernelSocket,
-			threadToKill->processId);
+	ipc_client_sendFinishProgram(process->kernelSocket, process->processId);
 
 	//Cierra el socket
-	close(threadToKill->kernelSocket);
+	close(process->kernelSocket);
 
+	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n", process->processId, process->kernelSocket, (unsigned int)process->threadID);
+	showFinishedThreadInfo(process);
 
-
-	printf("ABORTING PROCESS - PID:[%d] SOCKET:[%d] TID:[%u]\n",
-			threadToKill->processId, threadToKill->kernelSocket,
-			threadToKill->threadID);
-
-	showFinishedThreadInfo(threadToKill);
-
-	if (signal(SIGUSR1, programThread_sig_handler) == SIG_ERR)
-		printf("\ncan't catch SIGUSR1\n");
-
-	//Mata el Hilo
-	result = pthread_kill(threadToKill->threadID, SIGUSR1);
-
-	if (result != 0) {
-		perror("Error: Thread not finished successfully");
-	}
-
+	int indexOfRemovedThread = getIndexFromTid(process->threadID);
 	list_remove(processList, indexOfRemovedThread);
-	free(threadToKill->processMemoryAddress);
-
 }
 void disconnectConsole() {
 	printf("\n\n *** DISCONNECTING CONSOLE ***\n\n");
@@ -256,16 +228,9 @@ void connectToKernel(char * program) {
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	int programLength;
-
 	//Create a pointer to t_process in order to add it to the list of threads in execution
-	t_process *aux = malloc(sizeof(t_process));
-
-	//Saves a reference to the thread
-	pthread_t self = pthread_self();
-
-	//Populate the information of the aux pointer
-	aux->threadID = self;
-	aux->processMemoryAddress = aux; //Saves a reference to the memory direction of aux so it can be freed from endProgram
+	t_process *process = malloc(sizeof(t_process));
+	process->threadID = pthread_self();
 
 	printf("EL programa es: %s", program);
 	printf("\nServer Ip: %s Port No: %d", serverIp, portno);
@@ -292,12 +257,14 @@ void connectToKernel(char * program) {
 	}
 
 	//Saves the time on which process starts executing (considering the instant after it is connected to the Kernel)
-	aux->startTime = time(NULL);
+	process->startTime = time(NULL);
 
 	// Send handshake and wait for response
 	ipc_client_sendHandshake(CONSOLE, sockfd);
 	ipc_struct_handshake_response *response = ipc_client_waitHandshakeResponse(
 			sockfd);
+
+
 	log_debug(logger, "Se recibió respuesta de handshake. Success: %d",
 			response->success);
 
@@ -313,13 +280,34 @@ void connectToKernel(char * program) {
 	//Se le asigna pid
 	ipc_struct_program_start_response *startResponse =
 			ipc_client_receiveStartProgramResponse(sockfd);
-	aux->kernelSocket = sockfd;
-	aux->processId = startResponse->pid;
-	log_debug(logger, "program_start_response-> pid: %d", aux->processId);
+
+	//If no PID can be assigned
+	if(startResponse == NULL){
+
+	 	log_error(logger, "Start response failed - Can not assign PID. Program %s can not execute",program);
+
+	 	close(sockfd);
+
+	 	free(startResponse);
+	 	free(buffer);
+	 	free(process);
+
+	 	pthread_exit(0);
+
+
+	 }
+
+	process->kernelSocket = sockfd;
+	process->processId = startResponse->pid;
+	process->consoleImpressions = 0;
+
+	log_debug(logger, "program_start_response-> pid: %d", process->processId);
 
 	free(startResponse);
+	free(buffer);
 
-	list_add(processList, aux);
+
+	list_add(processList, process);
 	//int iterations = 0;
 
 
@@ -338,24 +326,23 @@ void connectToKernel(char * program) {
 			recv(sockfd, &length, sizeof(uint32_t), 0);
 
 			char *messageBuffer = malloc(length);
-
+			messageBuffer[length]= '\0';
 			recv(sockfd, messageBuffer, length, 0);
-			printf("\nProcess %u printing message \n", aux->processId);
+			printf("\nProcess %u printing message \n", process->processId);
 			log_debug(logger, "%s", messageBuffer);
 
 			free(messageBuffer);
-			aux->consoleImpressions ++;
+			process->consoleImpressions ++;
 
 		}
 
 		//If the Kernel console requests to finish a program
 		if (header.operationIdentifier == PROGRAM_FINISH) {
-
 			//endProgram automatically saves the endTime of the process so theres no need to save it here.
-			endProgram(aux->processId);
-
-
+			endProgram(process);
+			break;
 		}
+
 		/* test without kernel messages
 		printf("Hi! I'm thread %u\n", aux->threadID);
 
@@ -371,14 +358,7 @@ void connectToKernel(char * program) {
 
 	}
 
-	//Saves process end time in case it finishes it execution normally
-	aux->endTime = time(NULL);
-
-	//Shows time info
-	showFinishedThreadInfo(aux);
-
-	//Frees reserved memory
-	free(aux);
+	free(process);
 	return;
 }
 
@@ -442,23 +422,14 @@ void showCurrentThreads() {
 		printf("No threads currently in execution\n");
 	for (i = 0; i < listSize; i++) {
 		aux = list_get(processList, i);
-		printf("[%d] - TID: %u  PID: %u\n", i, aux->threadID, aux->processId);
+		printf("[%d] - TID: %u  PID: %u\n", i, (unsigned int)aux->threadID, aux->processId);
 	}
-}
-
-//Devuelve 0 si no hay elementos
-int noThreadsInExecution() {
-
-	int listSize = list_size(processList);
-
-	if (listSize == 0)
-		return 1;
-
-	return 0;
 }
 
 void showFinishedThreadInfo(t_process * aProcess){
 
+
+	/* Implemento lo mismo pero con log_info
 	printf("\n\n***************************************************************************************\n");
 	printf("Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
 	printf("Program started execution at: %s",ctime(&aProcess->startTime));
@@ -466,6 +437,14 @@ void showFinishedThreadInfo(t_process * aProcess){
 	printf("The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
 	printf("This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
 	printf("***************************************************************************************\n");
+	*/
+
+	log_info(logger, "Program with TID: [%u]  PID: [%u] has finished its execution\n", aProcess->threadID, aProcess->processId);
+	log_info(logger, "Program started execution at: %s",ctime(&aProcess->startTime));
+	log_info(logger, "Program finished execution at: %s",ctime(&aProcess->endTime));
+	log_info(logger, "The thread was running for %f seconds\n", difftime(aProcess->endTime, aProcess->startTime));
+	log_info(logger, "This thread printed [%d] messages on screen\n", aProcess->consoleImpressions);
+
 
 	return;
 
