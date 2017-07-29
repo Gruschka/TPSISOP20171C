@@ -800,20 +800,26 @@ int main(int argc, char **argv) {
 	return EXIT_SUCCESS;
 }
 
-void *connection_handler(void *shit) {
-	int sockfd = *(int*)shit;
+void *connection_handler(void *socket) {
+	int sockfd = *(int *)socket;
 	ipc_header header;
 
 	while (1) {
-		recv(sockfd, &header, sizeof(ipc_header), MSG_PEEK);
+		ssize_t count = recv(sockfd, &header, sizeof(ipc_header), MSG_PEEK);
+		if (count == 0) {
+			// Manejar desconexión
+			log_info(logger, "Se ha desconectado un cliente.");
+			break;
+		}
 
-		log_debug(logger, "Operation identifier: %d", header.operationIdentifier);
+		log_debug(logger, "Se recibió un pedido de operación.");
+		log_debug(logger, "Identificador de operación: %d", header.operationIdentifier);
 
 		switch (header.operationIdentifier) {
 		case HANDSHAKE: {
 			ipc_struct_handshake handshake;
 			recv(sockfd, &handshake, sizeof(ipc_struct_handshake), 0);
-			log_info(logger, "Handshake received. Process identifier: %s", processName(handshake.processIdentifier));
+			log_info(logger, "Handshake. Process ID: %s", processName(handshake.processIdentifier));
 
 			ipc_server_sendHandshakeResponse(sockfd, 1, k_frameSize);
 			break;
@@ -821,7 +827,7 @@ void *connection_handler(void *shit) {
 		case MEMORY_INIT_PROGRAM: {
 			ipc_struct_memory_init_program request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_init_program), 0);
-			log_debug(logger, "Init program. pid: %d. numberOfPages: %d", request.pid, request.numberOfPages);
+			log_debug(logger, "MEMORY_INIT_PROGRAM; pid: %d; numberOfPages: %d.", request.pid, request.numberOfPages);
 			int result = mem_initProcess(request.pid, request.numberOfPages);
 
 			ipc_struct_memory_init_program_response response;
@@ -834,9 +840,8 @@ void *connection_handler(void *shit) {
 		case MEMORY_READ: {
 			ipc_struct_memory_read request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_read), 0);
-			log_debug(logger, "Read page; pid: %d; pageNumber: %d; offset: %d; size: %d", request.pid, request.pageNumber, request.offset, request.size);
+			log_debug(logger, "MEMORY_READ; pid: %d; pageNumber: %d; offset: %d; size: %d.", request.pid, request.pageNumber, request.offset, request.size);
 			void *buffer = mem_read(request.pid, request.pageNumber, request.offset, request.size);
-			log_debug(logger, "Content: %s", buffer);
 
 			char success = buffer != NULL ? 1 : 0;
 			int bufferSize = buffer != NULL ? request.size : sizeof(void *);
@@ -872,7 +877,7 @@ void *connection_handler(void *shit) {
 			recv(sockfd, buffer, request.size, 0);
 			request.buffer = buffer;
 
-			log_debug(logger, "Write. pid: %d. pageNumber: %d. offset: %d. size: %d. buffer: %s", request.pid, request.pageNumber, request.offset, request.size, request.buffer);
+			log_debug(logger, "MEMORY_WRITE; pid: %d; pageNumber: %d; offset: %d; size: %d.", request.pid, request.pageNumber, request.offset, request.size);
 			int result = mem_write(request.pid, request.pageNumber, request.offset, request.size, request.buffer);
 
 			ipc_struct_memory_write_response response;
@@ -885,7 +890,7 @@ void *connection_handler(void *shit) {
 		case MEMORY_REQUEST_MORE_PAGES: {
 			ipc_struct_memory_request_more_pages request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_request_more_pages), 0);
-			log_debug(logger, "Request more pages for program. pid: %d. numberOfPages: %d", request.pid, request.numberOfPages);
+			log_debug(logger, "MEMORY_REQUEST_MORE_PAGES; pid: %d; numberOfPages: %d.", request.pid, request.numberOfPages);
 			int result = mem_addPagesToProcess(request.pid, request.numberOfPages);
 
 			ipc_struct_memory_request_more_pages_response response;
@@ -899,7 +904,7 @@ void *connection_handler(void *shit) {
 		case MEMORY_REMOVE_PAGE_FROM_PROGRAM: {
 			ipc_struct_memory_remove_page_from_program request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_remove_page_from_program), 0);
-			log_debug(logger, "Remove page from program. pid: %d; pageNumber: %d", request.pid, request.pageNumber);
+			log_debug(logger, "MEMORY_REMOVE_PAGE_FROM_PROGRAM; pid: %d; pageNumber: %d.", request.pid, request.pageNumber);
 			int result = mem_removePageFromProcess(request.pid, request.pageNumber);
 
 			ipc_struct_memory_remove_page_from_program_response response;
@@ -912,7 +917,7 @@ void *connection_handler(void *shit) {
 		case MEMORY_DEINIT_PROGRAM: {
 			ipc_struct_memory_deinit_program request;
 			recv(sockfd, &request, sizeof(ipc_struct_memory_deinit_program), 0);
-			log_debug(logger, "Denit program. pid: %d.", request.pid);
+			log_debug(logger, "MEMORY_DEINIT_PROGRAM. pid: %d.", request.pid);
 			int result = mem_deinitProcess(request.pid);
 
 			ipc_struct_memory_deinit_program_response response;
@@ -930,55 +935,53 @@ void *connection_handler(void *shit) {
 	return NULL;
 }
 
-void *serverThread_main(void *mierda) {
+void *serverThread_main(void *bleh) {
 	int socket_desc, client_sock, c;
 	struct sockaddr_in server, client;
 
-	//Create socket
+	// Create socket
 	int iSetOption = 1;
 	socket_desc = socket(AF_INET, SOCK_STREAM, 0);
 	setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption, sizeof(iSetOption));
 	if (socket_desc == -1) {
-		log_error(logger, "No se pudo crear el socket");
+		log_error(logger, "No se pudo crear el socket.");
 	}
-	log_debug(logger, "Se creo el socket");
+	log_debug(logger, "Se creó el socket correctamente.");
 
-	//Prepare the sockaddr_in structure
+	// Prepare the sockaddr_in structure
 	server.sin_family = AF_INET;
 	server.sin_addr.s_addr = INADDR_ANY;
 	server.sin_port = htons(k_connectionPort);
 
-	//Bind
+	// Bind
 	if (bind(socket_desc, (struct sockaddr *) &server, sizeof(server)) < 0) {
-		//print the error message
-		log_error(logger, "Falló el bind");
+		log_error(logger, "Falló el bind.");
 		return NULL;
 	}
 
-	//Listen
+	// Listen
 	listen(socket_desc, 3);
 
-	//Accept and incoming connection
-	log_debug(logger, "Waiting for incoming connections...");
+	// Accept and incoming connection
+	log_debug(logger, "Esperando conexiones entrantes...");
 	c = sizeof(struct sockaddr_in);
 
 	pthread_t thread_id;
 
 	while ((client_sock = accept(socket_desc, (struct sockaddr *) &client,
 			(socklen_t*) &c))) {
-		log_debug(logger, "Connection accepted");
+		log_debug(logger, "Conexión aceptada.");
 
-		if (pthread_create(&thread_id, NULL, connection_handler,
-				(void*) &client_sock) < 0) {
-			log_error(logger, "Could not create thread");
+		if (pthread_create(&thread_id, NULL, connection_handler, (void *)&client_sock) < 0) {
+			log_error(logger, "No se pudo crear thread para manejar conexión.");
 			return NULL;
 		}
 
-		log_debug(logger, "Handler assigned");
+		log_debug(logger, "Se asignó un handler.");
 	}
 
 	if (client_sock < 0) {
-		log_error(logger, "Accept failed");
+		log_error(logger, "No se pudo aceptar la conexión.");
 		return NULL;
 	}
 
