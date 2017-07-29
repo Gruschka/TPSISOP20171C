@@ -1111,15 +1111,15 @@ int main(int argc, char **argv) {
 	fs_validateFile("/prueba1.bin");
 
 
-	char *bafer = string_new();
-	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-	puts(read);
-	free(read);
-	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-	free(read);
-    //fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+//	char *bafer = string_new();
+//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+//	puts(read);
+//	free(read);
+//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+//	free(read);
+//    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 	return EXIT_SUCCESS;
 
