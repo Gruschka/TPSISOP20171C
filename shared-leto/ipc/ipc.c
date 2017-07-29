@@ -241,23 +241,30 @@ int ipc_createServer(char *port,
 		case FILESYSTEM_WRITE_FILE: {
 			ipc_struct_fileSystem_write_file *request = malloc(sizeof(ipc_struct_fileSystem_write_file));
 
-			recv(fd, &request->header, sizeof(ipc_header), 0);
+			ipc_header header;
+			recv(fd, &header, sizeof(ipc_header), 0);
 
 			int pathLength;
-
 			recv(fd, &pathLength, sizeof(int), 0);
 
-			request->path = malloc(pathLength);
+			char *path = malloc(pathLength);
+			recv(fd, path, pathLength, 0);
 
-			recv(fd, request->path, pathLength, 0);
+			int offset;
+			recv(fd, &offset, sizeof(int), 0);
 
-			recv(fd, &request->offset, pathLength, 0);
+			int size;
+			recv(fd, &size, sizeof(int), 0);
 
-			recv(fd, &request->size, pathLength, 0);
+			char *buffer = malloc(size);
+			recv(fd, buffer, size, 0);
 
-			request->buffer = malloc(request->size);
-
-			recv(fd, &request->buffer, request->size, 0);
+			request->header = header;
+			request->pathLength = pathLength;
+			request->path = path;
+			request->offset = offset;
+			request->size = size;
+			request->buffer = buffer;
 
 			deserializedStructHandler(fd, request->header.operationIdentifier, request);
 			break;
