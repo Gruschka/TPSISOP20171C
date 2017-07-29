@@ -424,6 +424,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
+
+	return -1;
 }
 int fs_createBlockFile(int blockNumber) {
 	char *fileName;
@@ -554,7 +556,7 @@ int fs_removeFile(char* filePath) {
 	//Borrar metadata
 	free(fileMetadata.blocks);
 	remove(filePath);
-
+	return EXIT_SUCCESS;
 }
 void fs_dump() {
 	printf("FS Metadata File Name: %s\n", myFS.FSMetadataFileName);
@@ -695,6 +697,7 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	free(fileMetadata.blocks); //anda
 	free(newFileMetadata.blocks);
+	return EXIT_FAILURE;
 }
 FILE* fs_openBlockFile(int blockNumber) {
 	char *fileName = fs_getBlockFilePath(blockNumber);
@@ -1037,7 +1040,6 @@ char *fs_getFullPathFromFileName(char *file){
 	return fullPath;
 
 }
-
 int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 	int iterator = strlen(filePath);
@@ -1065,7 +1067,6 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 
 }
-
 void fs_createPreviousFolders(const char *dir) {
         char tmp[256];
         char *p = NULL;
@@ -1111,15 +1112,15 @@ int main(int argc, char **argv) {
 	fs_validateFile("/prueba1.bin");
 
 
-//	char *bafer = string_new();
-//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-//	puts(read);
-//	free(read);
-//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-//	free(read);
-//    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+	char *bafer = string_new();
+	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+	puts(read);
+	free(read);
+	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+	free(read);
+    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 	return EXIT_SUCCESS;
 
