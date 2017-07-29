@@ -309,7 +309,7 @@ int ipc_createServer(char *port,
 		}
 		case KERNEL_MOVE_FILE_CURSOR: {
 			ipc_struct_kernel_move_file_cursor *moveFileCursor = malloc(
-					sizeof(ipc_struct_kernel_read_file));
+					sizeof(ipc_struct_kernel_move_file_cursor));
 
 			recv(fd, moveFileCursor, sizeof(ipc_struct_kernel_move_file_cursor),
 					0);

@@ -102,12 +102,12 @@ void cpu_writeMemory(int pid, int page, int offset, int size, void *buffer) {
 }
 uint32_t cpu_start(t_CPU *CPU){
 	CPU->assignedPCB = NULL;
-	CPU->connections[T_KERNEL].host = "127.0.0.1";
+	CPU->connections[T_KERNEL].host = "192.168.1.148";
 	CPU->connections[T_KERNEL].portNumber = 5001;
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "127.0.0.1";
+	CPU->connections[T_MEMORY].host = "192.168.1.148";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -464,34 +464,16 @@ ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_ker
 
 }
 ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
-	int bufferSize = sizeof(ipc_struct_kernel_dealloc_heap);
-	int bufferOffset = 0;
-	char *buffer = malloc(bufferSize);
-	memset(buffer,0,bufferSize);
+	ipc_struct_kernel_dealloc_heap dealloc;
 
-	ipc_struct_kernel_dealloc_heap request;
-
-	request.header.operationIdentifier = KERNEL_DEALLOC_HEAP;
-	request.processID = myCPU.assignedPCB->pid;
+	dealloc.header.operationIdentifier = KERNEL_DEALLOC_HEAP;
+	dealloc.processID = myCPU.assignedPCB->pid;
 	t_stackVariable variable;
 	cpu_getVariableReferenceFromPointer(pointer,&variable);
-	request.pageNumber = variable.page;
-	request.offset = variable.offset;
+	dealloc.pageNumber = variable.page;
+	dealloc.offset = variable.offset;
 
-
-	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
-	bufferOffset += sizeof(ipc_header);
-
-	memcpy(buffer+bufferOffset,&request.processID,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.pageNumber,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.offset,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	send(fd, buffer, bufferSize, 0);
+	send(fd, &dealloc, sizeof(ipc_struct_kernel_dealloc_heap), 0);
 
 	ipc_struct_kernel_dealloc_heap_response response;
 	recv(fd, &response, sizeof(ipc_struct_kernel_dealloc_heap_response), 0);
@@ -769,7 +751,6 @@ void cpu_kernelClose(uint32_t fileDescriptor){
 	fflush(stdout);
 }
 void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position){
-	printf("kernelMoveCursor\n");
 	ipc_struct_kernel_move_file_cursor_response response = ipc_sendKernelMoveFileCursor(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,position);
 	log_debug(logger,"Requested: KERNEL to move fd: %d to cursor: %d",fileDescriptor, position);
 	fflush(stdout);
