@@ -604,18 +604,18 @@ ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd,
 	request.position = position;
 	request.pid = myCPU.assignedPCB->pid;
 
-	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
-	bufferOffset += sizeof(ipc_header);
+//	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
+//	bufferOffset += sizeof(ipc_header);
+//
+//	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
+//	bufferOffset += sizeof(int);
+//
+//	memcpy(buffer+bufferOffset,&request.position,sizeof(int));
+//	bufferOffset += sizeof(int);
+//
+//	memcpy(buffer+bufferOffset, &request.pid, sizeof(uint32_t));
 
-	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.position,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset, &request.pid, sizeof(uint32_t));
-
-	send(fd, buffer, bufferSize, 0);
+	send(fd, &request, bufferSize, 0);
 
 	ipc_struct_kernel_move_file_cursor_response response;
 	recv(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
