@@ -207,6 +207,8 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount,
 				&& checkMetadata.blockSize == blockSize) { //Compara si los parametros de metadata matchean
 			log_debug(logger, "metadata parameters match");
 			fclose(metadataFileDescriptor);
+			//free(checkMetadata.magicNumber);
+
 		} else {
 			log_error(logger,
 					"metadata parameters don't match, aborting launch");
@@ -340,6 +342,7 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer) {
 	int blockCount = 1 + (output.size / myFS.metadata.blockSize);
 	char *stringArray = malloc(255);
 	memset(stringArray, 0, 255);
+//	char *stringArray;
 	int stringArrayOffset = 0;
 	int blockNumber;
 	int iterator = 0;
@@ -690,12 +693,20 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	fs_updateFileMetadata(metadataFilePointer, newFileMetadata);
 
+	//free(fileMetadata.blocks);
+	//free(newFileMetadata.blocks);
+
 }
 FILE* fs_openBlockFile(int blockNumber) {
 	char *fileName = fs_getBlockFilePath(blockNumber);
 	FILE *filePointer = fopen(fileName, "r+");
-	if (filePointer != NULL)
+	if (filePointer == NULL){
 		free(fileName);
+		return NULL;
+
+	}
+
+	//free(fileName);
 	return filePointer;
 }
 int fs_updateFileMetadata(FILE *filePointer, t_FileMetadata newMetadata) {
@@ -772,9 +783,11 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 
 	if (fs_validateFile(fileName)) { //If the path is invalid
 		log_error(logger, "Invalid path - Can not write file");
-		return 'f';
+		free(fileName);
+		return NULL;
 	}
 
+	//free(fileName);
 	error = fseek(blockFilePointer, offset, SEEK_SET);
 
 	if (strlen(blockFilePointer) == 0) {
@@ -845,7 +858,11 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	int bytesUntilEndOfBlock = myFS.metadata.blockSize - readOffset;
 	int bytesRemainingToRead = size;
 	int currentBlock = fileMetadata.blocks[currentBlockIndex];
-	char *readValues = malloc(size);
+	char *readValues;
+	readValues = malloc(size);
+	free(readValues);
+	readValues = malloc(size);
+
 	memset(readValues, 0, size);
 	char *buffer;
 	int offsetBuffer = 0;
@@ -887,9 +904,12 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	printf("READ %d BYTES WITH %d OFFSET FROM FILE [%s]: %s\n",
 			strlen(readValues), offset, filePath, readValues);
 
+	//free(buffer);
+	//free(fileMetadata.blocks);
 	return readValues;
 
 }
+
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa por ahora - dice si un bloque esta contenido por un archivo
 
 	FILE *filePointer = fopen(filePath, "r+");
@@ -1039,6 +1059,7 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 			memset(buffer,0, sizeof(char)*iterator+1);
 			memcpy(buffer,filePath,sizeof(char)*iterator);
 			fs_createPreviousFolders(buffer);
+			//free(buffer);
 			return EXIT_SUCCESS;
 		}
 
@@ -1046,7 +1067,7 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 	}
 
-
+	//free(buffer);
 	return EXIT_FAILURE;
 
 	///mnt/SADICA_FS/Archivos/prueba1.bin
@@ -1091,23 +1112,21 @@ int main(int argc, char **argv) {
 
 	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
-
-	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
 
-	//fs_validateFile("/prueba1.bin");
+	fs_validateFile("/prueba1.bin");
 
 
-//	char *bafer = string_new();
-//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-//	puts(read);
-//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-//		puts(read);
-//
-//	fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+	char *bafer = string_new();
+	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+	free(read);
+	char *read2 = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+	free(read2);
+
+	//fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 
 	return EXIT_SUCCESS;
