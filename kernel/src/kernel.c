@@ -412,7 +412,7 @@ void fetchConfiguration() {
 	configuration->quantum = config_get_int_value(__config, "QUANTUM");
 	configuration->quantumSleep = config_get_int_value(__config,
 			"QUANTUM_SLEEP");
-	configuration->schedulingAlgorithm = ROUND_ROBIN; //TODO: Levantar string y crear enum a partir del valor
+	configuration->schedulingAlgorithm = strcmp(config_get_string_value(__config, "ALGORITMO"), "RR") == 0 ? ROUND_ROBIN : FIFO;
 	configuration->multiprogrammingDegree = config_get_int_value(__config,
 			"GRADO_MULTIPROG");
 	configuration->stackSize = config_get_int_value(__config, "STACK_SIZE");
@@ -530,7 +530,6 @@ t_CPUx *getAvailableCPU() {
 void consolesServerSocket_handleDisconnection(int fd) {
 	log_info(logger, "New disconnection. fd: %d", fd);
 
-	// Si aca ya están finalizados no hago nada
 	int i;
 
 	for (i = 0; i < list_size(activeConsoles); i++) {
@@ -538,8 +537,6 @@ void consolesServerSocket_handleDisconnection(int fd) {
 
 		finishProgram(console->pid, -6);
 	}
-	// busco todos los pcbs para esa consola
-	// los finalizo y les pongo el exit code de desconexión
 }
 
 ////// Heap
@@ -886,7 +883,6 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.header.operationIdentifier = KERNEL_WRITE_FILE_RESPONSE;
 		response.success = 1;
 
-
 		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
 
 		break;
@@ -1103,16 +1099,27 @@ void finishProgram(int pid, int exitCode) {
 			sem_wait(&readyQueue_programsCount); // disminuyo la cantidad de programas en ready
 		}
 		sem_post(&readyQueue_availableSpaces); // aumento en 1 los lugares disponibles
-		return;
 	}
 	pthread_mutex_unlock(&readyQueue_mutex);
+	if (pcb != NULL) return;
 
 	pthread_mutex_lock(&execList_mutex);
 	pcb = list_takePCB(execList, pid);
 
 	if (pcb != NULL) { // si estaba en exec
 		// lo agrego a la lista de procesos a matar
-		return;
+		int *pid = malloc(sizeof(int));
+		*pid = pcb->pid;
+		list_add(processesToKill, pid);
 	}
 	pthread_mutex_unlock(&execList_mutex);
+	if (pcb != NULL) return;
+
+	pthread_mutex_lock(&blockQueue_mutex);
+	pcb = list_takePCB(blockQueue, pid);
+
+	if (pcb != NULL) { // SI ESTABA EN BLOCK
+
+	}
+	pthread_mutex_unlock(&blockQueue_mutex);
 }

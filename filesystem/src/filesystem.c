@@ -796,6 +796,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 
 	fflush(stdin);
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
+	
 
 	error = fgets(readValues, size + 1, blockFilePointer);
 
@@ -1105,25 +1106,30 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
 	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
+//	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+//	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
+//
+//	fs_validateFile("/prueba1.bin");
+<<<<<<< HEAD
 
-	fs_validateFile("/prueba1.bin");
 
-
-	char *bafer = string_new();
-	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-	puts(read);
-	free(read);
-	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-	free(read);
-    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+=======
+//
+//
+>>>>>>> branch 'master' of git@github.com:sisoputnfrba/tp-2017-1c-Deus-Vult.git
+//	char *bafer = string_new();
+//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+//	puts(read);
+//	free(read);
+//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+//	free(read);
+//    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 	return EXIT_SUCCESS;
 
