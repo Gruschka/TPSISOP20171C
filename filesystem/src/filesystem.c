@@ -392,9 +392,7 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer) {
 int fs_validateFile(char *file) { //Se fija si un path existe
 	FILE *fileDescriptor;
 
-	char *fullPath = fs_getFullPathFromFileName(file);
-
-	if (fileDescriptor = fopen(fullPath, "r+")) {
+	if (fileDescriptor = fopen(file, "r+")) {
 		close(fileDescriptor);
 		return EXIT_SUCCESS;
 	} else {
@@ -408,6 +406,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 	size_t firstFreeBlock;
 	char bloques[50];
 	memset(bloques, 0, 50);
+
+	fs_createSubDirectoriesFromFilePath(path);
 
 	if (fs_validateFile(path)) { //Si el archivo no existe
 		newFileDescriptor = fopen(path, "w+"); //Crea archivo Metadata del archivo nuevo
@@ -453,7 +453,7 @@ int fs_deleteBlockFile(int blockNumber) {
 			+ fs_getNumberOfDigits(blockNumber) + strlen(".bin") + 1;
 	fileName = malloc(fileNameLength);
 
-	sprintf(fileName, "%s%d.bin\n", myFS.dataDirectoryPath, blockNumber);
+	sprintf(fileName, "%s%d.bin", myFS.dataDirectoryPath, blockNumber);
 
 	remove(fileName);
 	free(fileName);
@@ -780,7 +780,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 	if (strlen(blockFilePointer) == 0) {
 		log_error(logger,
 				"Error while seeking offset on READ FILE operation (No bytes read - possible sparse file)");
-		return 'f';
+		return NULL;
 	}
 
 	fflush(stdin);
@@ -791,7 +791,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 	if (error == NULL) {
 		log_error(logger,
 				"Error while reading on READ FILE operation (sparse)");
-		return 'f';
+		return NULL;
 	}
 
 	printf("Reading %d bytes with %d offset from block %d : %s \n",
@@ -815,7 +815,7 @@ char *fs_getBlockFilePath(int blockNumber) {
 	return filePath;
 
 }
-int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
+char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 
 	if (fs_validateFile(filePath)) { //If the path is invalid
 		log_error(logger, "Invalid path - Can not write file");
@@ -855,8 +855,8 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 		if (bytesRemainingToRead > bytesUntilEndOfBlock) { //Si tiene que leer mas de un bloque
 			buffer = fs_readBlockFile(currentBlock, readOffset,
 					bytesUntilEndOfBlock); //Lee hasta fin de bloque
-			if (buffer == 'f')
-				return -1; //fails
+			if (buffer == NULL)
+				return NULL;
 
 			memcpy(readValues + offsetBuffer, buffer, bytesUntilEndOfBlock);
 			bytesRemainingToRead -= bytesUntilEndOfBlock; //Resta los bytes que leyo
@@ -870,8 +870,8 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 		} else { //Si tiene que terminar de leer los bytes restantes en el currentblock
 			buffer = fs_readBlockFile(fileMetadata.blocks[currentBlockIndex],
 					readOffset, bytesRemainingToRead);
-			if (buffer == 'f')
-				return -1; //fails
+			if (buffer == NULL)
+				return NULL;
 
 			memcpy(readValues + offsetBuffer, buffer, bytesRemainingToRead + 1);
 			bytesRemainingToRead = 0;
@@ -887,7 +887,7 @@ int fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	printf("READ %d BYTES WITH %d OFFSET FROM FILE [%s]: %s\n",
 			strlen(readValues), offset, filePath, readValues);
 
-	return EXIT_SUCCESS;
+	return readValues;
 
 }
 int fs_fileContainsBlockNumber(char *filePath, int blockNumber) { //No se usa por ahora - dice si un bloque esta contenido por un archivo
@@ -1026,6 +1026,51 @@ char *fs_getFullPathFromFileName(char *file){
 
 }
 
+int fs_createSubDirectoriesFromFilePath(char *filePath){
+
+	int iterator = strlen(filePath);
+
+	char *buffer;
+
+	while(iterator > 0){
+
+		if(filePath[iterator] == '/'){
+			buffer = malloc(sizeof(char)*iterator+1);
+			memset(buffer,0, sizeof(char)*iterator+1);
+			memcpy(buffer,filePath,sizeof(char)*iterator);
+			fs_createPreviousFolders(buffer);
+			return EXIT_SUCCESS;
+		}
+
+		iterator--;
+
+	}
+
+
+	return EXIT_FAILURE;
+
+	///mnt/SADICA_FS/Archivos/prueba1.bin
+
+
+}
+
+void fs_createPreviousFolders(const char *dir) {
+        char tmp[256];
+        char *p = NULL;
+        size_t len;
+
+        snprintf(tmp, sizeof(tmp),"%s",dir);
+        len = strlen(tmp);
+        if(tmp[len - 1] == '/')
+                tmp[len - 1] = 0;
+        for(p = tmp + 1; *p; p++)
+                if(*p == '/') {
+                        *p = 0;
+                        mkdir(tmp, S_IRWXU);
+                        *p = '/';
+                }
+        mkdir(tmp, S_IRWXU);
+}
 
 int main(int argc, char **argv) {
 	char *logFile = tmpnam(NULL);
@@ -1047,14 +1092,22 @@ int main(int argc, char **argv) {
 	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
-
+	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-	fs_validateFile("/prueba1.bin");
+	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
+
+	//fs_validateFile("/prueba1.bin");
 
 
 	char *bafer = string_new();
-	//string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-	//fs_writeFile("/mnt/SADICA_FS/Archivos/prueba1.bin",0,strlen(bafer),bafer);
+	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+	puts(read);
+	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+		puts(read);
+
+	fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 
 	return EXIT_SUCCESS;

@@ -353,13 +353,12 @@ int main(int argc, char **argv) {
 	initSharedVariables();
 	initSemaphores();
 
-	extern void testFS();
+//	extern void testFS();
 	//	testMemory();
 	//	testSemaphores();
 	//	testFS();
 
 	fs_init();
-
 
 	if (connectToMemory() == -1) {
 		log_error(logger, "La memoria no está corriendo");
@@ -628,24 +627,44 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 		metadata->isFree = 1;
 	}
 
-	//fixme falta desfragmentar y falta liberar la página cuando queda 100% disponible
 	{ // Desfragmentación
-//		heap_metadata *metadata = NULL;
-//
-//		int offset;
-//		for (offset = 0; offset < pageSize;) {
-//			heap_metadata *m = page + offset;
-//			if (m->isFree == 1 && m->size >= (neededSize + sizeof(heap_metadata))) {
-//				metadata = m;
-//				break;
-//			}
-//
-//			offset = offset + sizeof(heap_metadata) + m->size;
-//		}
+		heap_metadata *leftMetadata = NULL;
+		heap_metadata *rightMetadata = page;
+
+		int offset;
+		for (offset = 0; offset < pageSize;) {
+			if (leftMetadata != NULL && leftMetadata->isFree && rightMetadata->isFree) {
+				leftMetadata->size += sizeof(heap_metadata) + rightMetadata->size;
+				break;
+			}
+
+			int nextPointerOffset = offset + sizeof(heap_metadata) + rightMetadata->size;
+			if (nextPointerOffset < pageSize) {
+				leftMetadata = rightMetadata;
+				rightMetadata = page + nextPointerOffset;
+			}
+
+			offset = nextPointerOffset;
+		}
 	}
 
-	{ // Liberamos página cuando queda sin usar
+	// Guardamos nuestros cambios locales en la memoria
+	ipc_client_sendMemoryWrite(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize, page);
 
+	{ // Liberamos página cuando queda sin usar
+		heap_metadata *firstMetadata = page;
+		if (firstMetadata->isFree && (firstMetadata->size == (pageSize - (2 * sizeof(heap_metadata))))) {
+			int i;
+			for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+				heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+				if (a == assignment) {
+					list_remove(heap_page_assignments_list, i);
+					free(a);
+					break;
+				}
+			}
+			memory_sendRemovePageFromProgram(assignment->processID, assignment->processPageNumber);
+		}
 	}
 
 	free(page);

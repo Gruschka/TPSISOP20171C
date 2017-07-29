@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <commons/log.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
 extern t_log *logger;
 
@@ -147,16 +148,20 @@ int ipc_createServer(char *port,
 			break;
 		}
 		case KERNEL_OPEN_FILE: {
+			int readBytes = 0;
 			ipc_struct_kernel_open_file *openFile = malloc(
 					sizeof(ipc_struct_kernel_open_file));
 			ipc_header *header = malloc(sizeof(ipc_header));
 			recv(fd, header, sizeof(ipc_header), 0);
+			readBytes += sizeof(ipc_header);
 
 			int pathLength;
 			recv(fd, &pathLength, sizeof(int), 0);
+			readBytes += sizeof(int);
 
 			char *path = malloc(pathLength);
 			recv(fd, path, pathLength, 0);
+			readBytes += pathLength;
 
 			uint32_t pid;
 			recv(fd, &pid, sizeof(uint32_t), 0);
