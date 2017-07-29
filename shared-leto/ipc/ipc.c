@@ -33,7 +33,7 @@ int ipc_createServer(char *port,
 			ipc_header *header = malloc(sizeof(ipc_header));
 			recv(fd, header, sizeof(ipc_header), 0);
 			programStart->header = *header;
-			free(header);
+
 
 			uint32_t codeLength;
 			recv(fd, &codeLength, sizeof(uint32_t), 0);

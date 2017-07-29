@@ -270,6 +270,8 @@ t_PCB *pcb_deSerializePCB(void *serializedPCB, t_PCBVariableSize *variableSize){
 			list_add(deSerializedPCB->stackIndex,stackIndexRecord);
 			stackIndexRecordIterator++;
 		}
+	}else{
+		deSerializedPCB->stackIndex = NULL;
 	}
 
 	return deSerializedPCB;
