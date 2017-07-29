@@ -6,14 +6,14 @@ H_SRCS=$(shell find . -iname "*.h" | tr '\n' ' ')
 OBJS=$(C_SRCS:./%.c=build/%.o)
 
 # Clean and compile .so
-all: build/shared-leto.so
+all: build/libshared-leto.so
 
 create-dirs:
 	mkdir -p build/pcb
 	mkdir -p build/ipc
 
-build/shared-leto.so: create-dirs $(OBJS)
-	$(CC) -shared -Wall -o "build/shared-leto.so" $(OBJS) -lcommons
+build/libshared-leto.so: create-dirs $(OBJS)
+	$(CC) -shared -Wall -o "build/libshared-leto.so" $(OBJS) -lcommons
 
 build/ipc/%.o: ipc/%.c
 	$(CC) -c -fmessage-length=0 -fPIC -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
@@ -30,11 +30,11 @@ clean:
 	$(RM) build
 
 install: all
-	cp -u build/shared-leto.so /usr/lib
+	cp -u build/libshared-leto.so /usr/lib
 	cp --parents -u $(H_SRCS) /usr/include
 
 uninstall:
-	rm -f /usr/lib/shared-leto.so
+	rm -f /usr/lib/libshared-leto.so
 	rm -rf /usr/include/shared-leto
 
 .PHONY: all create-dirs clean install uninstall
