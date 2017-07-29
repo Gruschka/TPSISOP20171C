@@ -657,7 +657,7 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 			int i;
 			for (i = 0; i < list_size(heap_page_assignments_list); i++) {
 				heap_page_assignment *a = list_get(heap_page_assignments_list, i);
-				if (a->processID == assignment->processID && a->processPageNumber == assignment->processPageNumber) {
+				if (a == assignment) {
 					list_remove(heap_page_assignments_list, i);
 					free(a);
 					break;
