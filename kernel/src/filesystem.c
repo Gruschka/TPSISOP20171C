@@ -64,11 +64,11 @@ void testFS() {
 //	fs_permission_flags rwFlags = { .create = 0, .read = 1, .write = 1 };
 //	fs_permission_flags rFlags = { .create = 0, .read = 1, .write = 0 };
 
-	fs_openFile2(1, "/code/tp-sisop.sh", "r");
-	fs_openFile2(0, "/code/tp-sisop.sh", "rw");
-	fs_openFile2(0, "/dev/null", "rwc");
-	fs_openFile2(0, "/notas.txt", "r");
-	fs_openFile2(1, "/cursos/z1234/alumnos.zip", "r");
+	fs_openFile(1, "/code/tp-sisop.sh", "r");
+	fs_openFile(0, "/code/tp-sisop.sh", "rw");
+	fs_openFile(0, "/dev/null", "rwc");
+	fs_openFile(0, "/notas.txt", "r");
+	fs_openFile(1, "/cursos/z1234/alumnos.zip", "r");
 
 	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: READ): %d", 1, 3, fs_isOperationAllowed(1, 3, READ));
 	log_debug(logger, "isOperationAllowed(pid: %d, fd: %d, operation: WRITE): %d", 1, 3, fs_isOperationAllowed(1, 3, WRITE));
@@ -132,9 +132,13 @@ int fs_createFile(int pid, char *path){
 	ipc_struct_fileSystem_create_file_response response;
 	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_create_file_response), 0);
 
+
 }
 
-int fs_openFile(int pid, char *path, fs_permission_flags permissions) {
+
+int fs_openFile(int pid, char *path, char *permissionsString) {
+	fs_permission_flags permissionFlags = permissions(permissionsString);
+
 	fs_pft *pft = pft_findOrCreate(pid);
 
 	int bufferSize = sizeof(ipc_header) + sizeof(int) + strlen(path) +1 ;
@@ -168,20 +172,14 @@ int fs_openFile(int pid, char *path, fs_permission_flags permissions) {
 	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_validate_file_response), 0);
 
 	if(response.status == EXIT_FAILURE){
-		if(permissions.create){
+		if(permissionFlags.create){
 			fs_createFile(pid,path);
 		}else{
 			return -1;
 		}
 	}
 
-	return pft_addEntry(pft, pid, path, permissions);
-}
-
-int fs_openFile2(int pid, char *path, char *permissionsString) {
-	fs_permission_flags permissionFlags = permissions(permissionsString);
-
-	return fs_openFile(pid, path, permissionFlags);
+	return pft_addEntry(pft, pid, path, permissionFlags);
 }
 
 int fs_isOperationAllowed(int pid, int fd, fs_operation operation) {
@@ -384,7 +382,7 @@ int pft_addEntry(fs_pft *pft, int pid, char *path, fs_permission_flags flags) {
 	entry->fd = idx + 3; // los fd empiezan en 3
 	list_add_in_index(pft->entries, idx, entry);
 
-	return idx;
+	return idx + 3;
 }
 
 fs_pft_entry *pft_findEntry(fs_pft *pft, int fd) {

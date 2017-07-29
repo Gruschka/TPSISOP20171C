@@ -824,8 +824,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_open_file *openFile = buffer;
 		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %s", openFile->path, openFile->flags);
 
-		fs_permission_flags flags = { openFile->creation, openFile->read, openFile->write };
-		int fileDescriptor = fs_openFile(openFile->pid, openFile->path, flags);
+		int fileDescriptor = fs_openFile(openFile->pid, openFile->path, openFile->flags);
 
 		ipc_struct_kernel_open_file_response response;
 		response.header.operationIdentifier = KERNEL_OPEN_FILE_RESPONSE;

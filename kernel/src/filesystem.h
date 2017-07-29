@@ -52,8 +52,7 @@ fs_gft *fs_globalFileTable;
 
 // Public
 void fs_init();
-int fs_openFile(int pid, char *path, fs_permission_flags permissions);
-int fs_openFile2(int pid, char *path, char *permissionsString);
+int fs_openFile(int pid, char *path, char *permissionsString);
 void fs_closeFile(int pid, int fd);
 void *fs_readFile(int pid, int fd, int offset, int size);
 void fs_writeFile(int pid, int fd, int offset, int size, void *buffer);

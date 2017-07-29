@@ -532,9 +532,6 @@ ipc_struct_kernel_open_file_response ipc_sendKernelOpenFile(int fd, char *path, 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
 
-	memcpy(buffer+bufferOffset, &request.pid, sizeof(int));
-	bufferOffset += sizeof(int);
-
 	memcpy(buffer+bufferOffset,&request.pathLength,sizeof(int));
 	bufferOffset += sizeof(int);
 
@@ -741,7 +738,7 @@ void cpu_kernelFree(uint32_t pointer){
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
 	printf("kernelOpen\n");
-	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor, myCPU.assignedPCB->pid, address,flags);
+	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor, address,flags);
 
 	fflush(stdout);
 	return response.fileDescriptor;
