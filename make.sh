@@ -11,6 +11,7 @@ make all
 sudo make install
 
 cd ..
+cd ..
 
 cd shared-leto
 sudo make all
