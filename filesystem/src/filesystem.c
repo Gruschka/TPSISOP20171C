@@ -213,6 +213,7 @@ int fs_openOrCreateMetadataFiles(t_FS *FS, int blockSize, int blockAmount,
 			fclose(metadataFileDescriptor);
 			return EXIT_FAILURE;
 		}
+		free(checkMetadata.magicNumber); //Anda
 
 	} else { //No puede abrirlo => Lo crea
 		log_debug(logger, "metadata file not found creating with parameters");
@@ -338,8 +339,8 @@ t_FileMetadata fs_getMetadataFromFile(FILE* filePointer) {
 	char *compiledRead;
 	//strtok con igual => BLOQUES\0[4,1231,5,1,0,12,543]
 	int blockCount = 1 + (output.size / myFS.metadata.blockSize);
-	char *stringArray = malloc(255);
-	memset(stringArray, 0, 255);
+	char *stringArray;
+	//memset(stringArray, 0, 255);
 	int stringArrayOffset = 0;
 	int blockNumber;
 	int iterator = 0;
@@ -423,6 +424,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
+
+	return -1;
 }
 int fs_createBlockFile(int blockNumber) {
 	char *fileName;
@@ -488,6 +491,7 @@ int fs_writeNBytesOfXToFile(FILE *fileDescriptor, int N, int C) { //El tamanio d
 
 	memset(buffer, C, N);
 	fwrite(buffer, N, 1, fileDescriptor);
+	free(buffer); //Anda
 	return EXIT_SUCCESS;
 }
 int *fs_getArrayFromString(char **stringArray, int numberOfBlocks) {
@@ -550,8 +554,9 @@ int fs_removeFile(char* filePath) {
 	fclose(filePointer);
 
 	//Borrar metadata
+	free(fileMetadata.blocks);
 	remove(filePath);
-
+	return EXIT_SUCCESS;
 }
 void fs_dump() {
 	printf("FS Metadata File Name: %s\n", myFS.FSMetadataFileName);
@@ -690,6 +695,11 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	fs_updateFileMetadata(metadataFilePointer, newFileMetadata);
 
+
+	free(fileMetadata.blocks); //anda
+	free(newFileMetadata.blocks);
+
+	return EXIT_SUCCESS;
 }
 FILE* fs_openBlockFile(int blockNumber) {
 	char *fileName = fs_getBlockFilePath(blockNumber);
@@ -772,9 +782,10 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 
 	if (fs_validateFile(fileName)) { //If the path is invalid
 		log_error(logger, "Invalid path - Can not write file");
-		return 'f';
+		return 'NULL';
 	}
 
+	free(fileName);
 	error = fseek(blockFilePointer, offset, SEEK_SET);
 
 	if (strlen(blockFilePointer) == 0) {
@@ -822,6 +833,9 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 		return -1;
 	}
 
+	char *readValues = malloc(size + 1);
+	memset(readValues, 0, size);
+
 	FILE *filePointer = fopen(filePath, "r+");
 	t_FileMetadata fileMetadata = fs_getMetadataFromFile(filePointer);
 
@@ -845,8 +859,7 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	int bytesUntilEndOfBlock = myFS.metadata.blockSize - readOffset;
 	int bytesRemainingToRead = size;
 	int currentBlock = fileMetadata.blocks[currentBlockIndex];
-	char *readValues = malloc(size);
-	memset(readValues, 0, size);
+
 	char *buffer;
 	int offsetBuffer = 0;
 
@@ -873,7 +886,9 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 			if (buffer == NULL)
 				return NULL;
 
-			memcpy(readValues + offsetBuffer, buffer, bytesRemainingToRead + 1);
+			memcpy(readValues + offsetBuffer, buffer, bytesRemainingToRead);
+			char *lastChar = readValues + offsetBuffer + bytesRemainingToRead;
+			lastChar[0] = '\0';
 			bytesRemainingToRead = 0;
 			offsetBuffer += strlen(buffer);
 			break;
@@ -887,6 +902,8 @@ char *fs_readFile(char * filePath, uint32_t offset, uint32_t size) {
 	printf("READ %d BYTES WITH %d OFFSET FROM FILE [%s]: %s\n",
 			strlen(readValues), offset, filePath, readValues);
 
+	free(buffer);
+	free(fileMetadata.blocks);
 	return readValues;
 
 }
@@ -994,7 +1011,8 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_write_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
 
-		fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		response.bytesWritten = fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_write_file_response),0);
 
 		break;
 	}
@@ -1025,7 +1043,6 @@ char *fs_getFullPathFromFileName(char *file){
 	return fullPath;
 
 }
-
 int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 	int iterator = strlen(filePath);
@@ -1039,6 +1056,7 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 			memset(buffer,0, sizeof(char)*iterator+1);
 			memcpy(buffer,filePath,sizeof(char)*iterator);
 			fs_createPreviousFolders(buffer);
+			free(buffer); //Anda
 			return EXIT_SUCCESS;
 		}
 
@@ -1046,14 +1064,12 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 	}
 
-
 	return EXIT_FAILURE;
 
 	///mnt/SADICA_FS/Archivos/prueba1.bin
 
 
 }
-
 void fs_createPreviousFolders(const char *dir) {
         char tmp[256];
         char *p = NULL;
@@ -1089,26 +1105,26 @@ int main(int argc, char **argv) {
 
 	fs_mount(&myFS);
 
-	ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
+	//ipc_createServer("5004",kernelServerSocket_handleNewConnection,kernelServerSocket_handleDisconnection,kernelServerSocket_handleDeserializedStruct);
 
 
 	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
 
-	//fs_validateFile("/prueba1.bin");
+	fs_validateFile("/prueba1.bin");
 
 
-//	char *bafer = string_new();
-//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-//	puts(read);
-//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-//		puts(read);
-//
-//	fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-
+	char *bafer = string_new();
+	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+	puts(read);
+	free(read);
+	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+	free(read);
+    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 	return EXIT_SUCCESS;
+
 }

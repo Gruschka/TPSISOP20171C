@@ -296,6 +296,7 @@ typedef struct kernel_move_file_cursor_response {
 
 typedef struct kernel_write_file {
 	ipc_header header;
+	int pid;
 	int fileDescriptor;
 	int size;
 	char *buffer;
@@ -308,6 +309,7 @@ typedef struct kernel_write_file_response {
 
 typedef struct kernel_read_file {
 	ipc_header header;
+	int pid;
 	int fileDescriptor;
 	uint32_t valuePointer;
 	int size;

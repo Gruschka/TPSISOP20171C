@@ -243,7 +243,7 @@ t_PCB *cpu_createPCBFromScript(char *script){
 	return PCB;
 }
 uint32_t cpu_declareVariable(char variableName){
-//	printf("declareVariable\n");
+	log_debug(logger,"declare variable %c",variableName);
 	t_variableAdd type = pcb_getVariableAddTypeFromTag(variableName);
 	t_stackVariable *variable = malloc(sizeof(t_stackVariable));
 	int dataBasePage = myCPU.assignedPCB->codePages;
@@ -268,8 +268,8 @@ uint32_t cpu_declareVariable(char variableName){
 	return currentVariableSpaceInMemory;
 }
 void cpu_endProgram(){
-	printf("endProgram\n");
-	myCPU.status = FINISHED;
+	log_debug(logger,"endProgram");
+	myCPU.status = WAITING;
 	myCPU.instructionPointer = 0;
 	myCPU.variableCounter = 0;
 	pcb_dump(myCPU.assignedPCB);
@@ -278,12 +278,14 @@ void cpu_endProgram(){
 }
 uint32_t cpu_getVariablePosition(char variableName){
 	//printf("getVariablePosition\n");
+
 	t_variableAdd type = pcb_getVariableAddTypeFromTag(variableName);
 
 	t_stackVariable *variable = pcb_getVariable(myCPU.assignedPCB,variableName);
 
-
-	return cpu_getPointerFromVariableReference(*variable);
+	uint32_t returnValue = cpu_getPointerFromVariableReference(*variable);
+	log_debug(logger,"referenced address: %d for variable: %c",returnValue,variableName);
+	return returnValue;
 }
 int cpu_dereference(uint32_t variableAddress){
 	//rintf("dereference\n");
@@ -292,17 +294,19 @@ int cpu_dereference(uint32_t variableAddress){
 	int *valueBuffer = cpu_readMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int));
 	int value = *valueBuffer;
 	free(valueBuffer);
+	log_debug(logger,"dereferenced address: %d to value: %d",variableAddress, value);
 	return value;
 }
 void cpu_assignValue(uint32_t variableAddress, int value){
 	//printf("assignValue\n");
+	log_debug(logger,"assign value: %d to address: %d", value, variableAddress);
 	t_stackVariable variable;
 	cpu_getVariableReferenceFromPointer(variableAddress,&variable);
 	int valueBuffer = value;
 	cpu_writeMemory(myCPU.assignedPCB->pid,variable.page,variable.offset,sizeof(int),&valueBuffer);
 }
 void cpu_gotoLabel(char *label){
-	printf("gotoLabel\n");
+	log_debug(logger,"goto: %s",label);
 	int labelIndexIteratorSize = 0;
 	int labelIndexIterator = 0;
 	char *buffer;
@@ -329,9 +333,10 @@ void cpu_gotoLabel(char *label){
 	}
 }
 void cpu_callNoReturn(char *label){
-	printf("callNoReturn\n");
+	log_debug(logger,"callNoReturn");
 }
 void cpu_callWithReturn(char *label, uint32_t returnAddress){
+	log_debug(logger,"call %s with return address: %d", label, returnAddress);
 	t_stackIndexRecord *record = malloc(sizeof(t_stackIndexRecord));
 	t_stackVariable variable;
 	cpu_getVariableReferenceFromPointer(returnAddress,&variable);
@@ -346,6 +351,7 @@ void cpu_callWithReturn(char *label, uint32_t returnAddress){
 	pcb_addSpecificStackIndexRecord(myCPU.assignedPCB,record);
 }
 void cpu_return(int returnValue){
+	log_debug(logger,"return value: %d",returnValue);
 	int returnValueCopy = returnValue;
 	int currentStackLevel = myCPU.assignedPCB->variableSize.stackIndexRecordCount -1;
 
@@ -599,7 +605,6 @@ ipc_struct_kernel_close_file_response ipc_sendKernelCloseFile(int fd, int fileDe
 	send(fd, buffer, bufferSize, 0);
 
 	ipc_struct_kernel_close_file_response response;
-	recv(fd, &response, sizeof(ipc_struct_kernel_close_file_response), 0);
 
 	return response;
 
@@ -645,12 +650,16 @@ ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDe
 	ipc_struct_kernel_write_file request;
 
 	request.header.operationIdentifier = KERNEL_WRITE_FILE;
+	request.pid = myCPU.assignedPCB->pid;
 	request.fileDescriptor = fileDescriptor;
 	request.size = size;
 	request.buffer = strdup(content);
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pid,sizeof(int));
+	bufferOffset += sizeof(int);
 
 	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
 	bufferOffset += sizeof(int);
@@ -679,6 +688,7 @@ ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDesc
 	ipc_struct_kernel_read_file request;
 
 	request.header.operationIdentifier = KERNEL_READ_FILE;
+	request.pid = myCPU.assignedPCB->pid;
 	request.fileDescriptor = fileDescriptor;
 	request.size = size;
 	request.valuePointer = valuePointer;
@@ -686,6 +696,9 @@ ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDesc
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pid,sizeof(int));
+	bufferOffset += sizeof(int);
 
 	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
 	bufferOffset += sizeof(int);
@@ -719,7 +732,7 @@ void cpu_kernelSignal(char *semaphoreId){
 	fflush(stdout);
 }
 uint32_t cpu_kernelAlloc(int size){
-	printf("kernelAlloc\n");
+	log_debug(logger,"Requested: KERNEL to ALLOC bytes: %d",size);
 	ipc_struct_kernel_alloc_heap request;
 	request.header.operationIdentifier = KERNEL_ALLOC_HEAP;
 	request.numberOfBytes = size;
@@ -732,31 +745,33 @@ uint32_t cpu_kernelAlloc(int size){
 	return cpu_getPointerFromVariableReference(variable);
 }
 void cpu_kernelFree(uint32_t pointer){
-	printf("kernelFree\n");
+	log_debug(logger,"Requested: KERNEL to FREE address: %d",pointer);
 	ipc_struct_kernel_dealloc_heap_response response = ipc_sendKernelFree(myCPU.connections[T_KERNEL].socketFileDescriptor,pointer);
 	fflush(stdout);
 }
 uint32_t cpu_kernelOpen(char *address, t_flags flags){
-	printf("kernelOpen\n");
 	ipc_struct_kernel_open_file_response response = ipc_sendKernelOpenFile(myCPU.connections[T_KERNEL].socketFileDescriptor, address,flags);
 
 	fflush(stdout);
+	log_debug(logger,"Requested: KERNEL to open file: %s with flags(rwc):%d%d%d",address,flags.read,flags.write,flags.creation);
 	return response.fileDescriptor;
 }
 void cpu_kernelDelete(uint32_t fileDescriptor){
 	printf("kernelDelete\n");
 	ipc_struct_kernel_delete_file_response response = ipc_sendKernelDeleteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
-
+	log_debug(logger,"Requested: KERNEL to delete fd: %d",fileDescriptor);
 	fflush(stdout);
 }
 void cpu_kernelClose(uint32_t fileDescriptor){
-	printf("kernelClose\n");
+	log_debug(logger,"Requested: KERNEL to close fd: %d",fileDescriptor);
 	ipc_struct_kernel_close_file_response response = ipc_sendKernelCloseFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor);
+
 	fflush(stdout);
 }
 void cpu_kernelMoveCursor(uint32_t fileDescriptor, int position){
 	printf("kernelMoveCursor\n");
 	ipc_struct_kernel_move_file_cursor_response response = ipc_sendKernelMoveFileCursor(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,position);
+	log_debug(logger,"Requested: KERNEL to move fd: %d to cursor: %d",fileDescriptor, position);
 	fflush(stdout);
 }
 void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
@@ -766,11 +781,12 @@ void cpu_kernelWrite(uint32_t fileDescriptor, void* buffer, int size){
 	printf("%s\n",output);
 	fflush(stdout);
 	free(output);
+	log_debug(logger,"Requested: KERNEL to WRITE fd: %d a total of bytes: %d with content: %s",fileDescriptor,size,(char *)buffer);
 	ipc_struct_kernel_write_file_response response = ipc_sendKernelWriteFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,size,buffer);
 }
 void cpu_kernelRead(uint32_t fileDescriptor, uint32_t value, int size){
-	printf("kernelRead\n");
 	ipc_struct_kernel_read_file_response response = ipc_sendKernelReadFile(myCPU.connections[T_KERNEL].socketFileDescriptor,fileDescriptor,value,size);
+	log_debug(logger,"Requested: KERNEL to READ fd: %d, a total of bytes: %d into address: %d",fileDescriptor,size,value);
 	fflush(stdout);
 }
 t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
@@ -783,14 +799,14 @@ t_memoryDirection cpu_getMemoryDirectionFromAddress(uint32_t address){
 	return direction;
 }
 int cpu_sharedVariableGet(char *identifier){
-	printf("sharedVariableGet identifier: %s\n", identifier);
+	log_debug(logger,"get shared variable: %s",identifier);
 	ipc_client_sendGetSharedVariable(myCPU.connections[T_KERNEL].socketFileDescriptor,identifier);
 	int value = ipc_client_waitSharedVariableValue(myCPU.connections[T_KERNEL].socketFileDescriptor);
-	printf("global variable value: %d", value);
+	log_debug(logger,"global variable value: %d", value);
 	return value;
 }
 int cpu_sharedVariableSet(char *identifier, int value){
-	printf("sharedVariableSet");
+	log_debug(logger,"sharedVariable: %s Set: %d",identifier,value);
 }
 int cpu_receivePCB(){
 	if(myCPU.connections[T_KERNEL].isDummy){
@@ -878,10 +894,10 @@ int main() {
 
 	while (1) {
 		myCPU.status = WAITING;
-
+		log_debug(logger,"Cpu waiting PCB");
 		//wait for PCB
 		cpu_receivePCB();
-
+		log_debug(logger,"PCB received");
 		while(myCPU.status == RUNNING && myCPU.quantum > 0){
 			   //cpu fetch
 			   t_codeIndex currentInstructionIndex = myCPU.assignedPCB->codeIndex[myCPU.instructionPointer];
@@ -891,7 +907,7 @@ int main() {
 			   char *instruction = cpu_readMemory(myCPU.assignedPCB->pid,page,offset,currentInstructionIndex.size);
 			   instruction[currentInstructionIndex.size-1]='\0';
 			   fflush(stdout);
-			   printf("fetched instruction is: %s\n",(char *) instruction);
+			   log_debug(logger,"fetched instruction is: %s\n",(char *) instruction);
 			   fflush(stdout);
 
 			   //cpu decode & execute
