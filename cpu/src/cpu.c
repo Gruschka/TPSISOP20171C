@@ -464,34 +464,16 @@ ipc_struct_kernel_alloc_heap_response ipc_sendKernelAlloc(int fd, ipc_struct_ker
 
 }
 ipc_struct_kernel_dealloc_heap_response ipc_sendKernelFree(int fd, uint32_t pointer){
-	int bufferSize = sizeof(ipc_struct_kernel_dealloc_heap);
-	int bufferOffset = 0;
-	char *buffer = malloc(bufferSize);
-	memset(buffer,0,bufferSize);
+	ipc_struct_kernel_dealloc_heap dealloc;
 
-	ipc_struct_kernel_dealloc_heap request;
-
-	request.header.operationIdentifier = KERNEL_DEALLOC_HEAP;
-	request.processID = myCPU.assignedPCB->pid;
+	dealloc.header.operationIdentifier = KERNEL_DEALLOC_HEAP;
+	dealloc.processID = myCPU.assignedPCB->pid;
 	t_stackVariable variable;
 	cpu_getVariableReferenceFromPointer(pointer,&variable);
-	request.pageNumber = variable.page;
-	request.offset = variable.offset;
+	dealloc.pageNumber = variable.page;
+	dealloc.offset = variable.offset;
 
-
-	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
-	bufferOffset += sizeof(ipc_header);
-
-	memcpy(buffer+bufferOffset,&request.processID,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.pageNumber,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	memcpy(buffer+bufferOffset,&request.offset,sizeof(int));
-	bufferOffset += sizeof(int);
-
-	send(fd, buffer, bufferSize, 0);
+	send(fd, &dealloc, sizeof(ipc_struct_kernel_dealloc_heap), 0);
 
 	ipc_struct_kernel_dealloc_heap_response response;
 	recv(fd, &response, sizeof(ipc_struct_kernel_dealloc_heap_response), 0);

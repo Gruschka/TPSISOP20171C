@@ -554,7 +554,7 @@ void size_logMemorySize() {
 
 void dump_cache() {
 	pthread_rwlock_rdlock(&cacheMemoryRwlock);
-	char *logPath = "./src/cache_dump.txt";
+	char *logPath = "./cache_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 1, LOG_LEVEL_INFO);
 
 	int i;
@@ -582,7 +582,7 @@ void dump_cache() {
 
 void dump_pageEntriesAndActiveProcesses() {
 	pthread_rwlock_rdlock(&physicalMemoryRwlock);
-	char *logPath = "./src/pages_table_dump.txt";
+	char *logPath = "./pages_table_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
 
 	int i;
@@ -603,7 +603,7 @@ void dump_pageEntriesAndActiveProcesses() {
 
 void dump_pagesContentForProcess(u_int32_t processID) {
 	pthread_rwlock_rdlock(&physicalMemoryRwlock);
-	char *logPath = "./src/process_memory_dump.txt";
+	char *logPath = "./process_memory_dump.txt";
 	t_log *log = log_create(logPath, "memoria", 0, LOG_LEVEL_INFO);
 
 	log_info(log, "Contenido de las páginas asignadas para proceso (processID: %d)", processID);
@@ -724,7 +724,7 @@ int main(int argc, char **argv) {
 	pthread_rwlock_init(&cacheMemoryRwlock, NULL);
 
 	{ // Log
-		char *logPath = "./src/debug.txt";
+		char *logPath = "./debug.txt";
 		logger = log_create(logPath, "memoria", 1, LOG_LEVEL_DEBUG);
 	}
 
