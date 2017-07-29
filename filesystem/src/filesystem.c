@@ -690,6 +690,8 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	fs_updateFileMetadata(metadataFilePointer, newFileMetadata);
 
+	return size;
+
 }
 FILE* fs_openBlockFile(int blockNumber) {
 	char *fileName = fs_getBlockFilePath(blockNumber);
@@ -994,7 +996,8 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_write_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
 
-		fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		response.bytesWritten = fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_write_file_response),0);
 
 		break;
 	}
