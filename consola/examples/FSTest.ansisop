@@ -1,0 +1,7 @@
+begin
+  variables a, f
+  a = 1234567890
+  abrir f CE /archivo.bin
+  escribir f a 10
+  cerrar f
+end

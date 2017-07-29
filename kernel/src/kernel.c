@@ -651,7 +651,7 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 			int i;
 			for (i = 0; i < list_size(heap_page_assignments_list); i++) {
 				heap_page_assignment *a = list_get(heap_page_assignments_list, i);
-				if (a->processID == assignment->processID && a->processPageNumber == assignment->processPageNumber) {
+				if (a == assignment) {
 					list_remove(heap_page_assignments_list, i);
 					free(a);
 					break;
@@ -822,7 +822,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 	}
 	case KERNEL_OPEN_FILE: {
 		ipc_struct_kernel_open_file *openFile = buffer;
-		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %d%d%d", openFile->path, openFile->creation, openFile->read, openFile->write);
+		log_debug(logger, "KERNEL_OPEN_FILE: %s. CRW: %s", openFile->path, openFile->flags);
 
 		fs_permission_flags flags = { openFile->creation, openFile->read, openFile->write };
 		int fileDescriptor = fs_openFile(openFile->pid, openFile->path, flags);
@@ -832,7 +832,11 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.success = 1;
 		response.fileDescriptor = fileDescriptor;
 
+		fs_openFile(openFile->pid,openFile->path,openFile->flags);
+
 		send(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
+
+
 		break;
 	}
 	case KERNEL_WRITE_FILE: {
@@ -843,7 +847,9 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.header.operationIdentifier = KERNEL_WRITE_FILE_RESPONSE;
 		response.success = 1;
 
+
 		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
+
 		break;
 	}
 	case KERNEL_READ_FILE: {
