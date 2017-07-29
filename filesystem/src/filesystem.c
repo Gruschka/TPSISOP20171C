@@ -424,6 +424,8 @@ int fs_createFile(char *path) { //Crea archivo nuevo
 		fclose(newFileDescriptor);
 		return EXIT_SUCCESS;
 	}
+
+	return -1;
 }
 int fs_createBlockFile(int blockNumber) {
 	char *fileName;
@@ -554,7 +556,7 @@ int fs_removeFile(char* filePath) {
 	//Borrar metadata
 	free(fileMetadata.blocks);
 	remove(filePath);
-
+	return EXIT_SUCCESS;
 }
 void fs_dump() {
 	printf("FS Metadata File Name: %s\n", myFS.FSMetadataFileName);
@@ -693,8 +695,11 @@ int fs_writeFile(char * filePath, uint32_t offset, uint32_t size, void * buffer)
 
 	fs_updateFileMetadata(metadataFilePointer, newFileMetadata);
 
+
 	free(fileMetadata.blocks); //anda
 	free(newFileMetadata.blocks);
+
+	return EXIT_SUCCESS;
 }
 FILE* fs_openBlockFile(int blockNumber) {
 	char *fileName = fs_getBlockFilePath(blockNumber);
@@ -791,6 +796,7 @@ char *fs_readBlockFile(int blockNumberToRead, uint32_t offset, uint32_t size) {
 
 	fflush(stdin);
 	//error = fread(readValues, sizeof(char),size, blockFilePointer);
+	
 
 	error = fgets(readValues, size + 1, blockFilePointer);
 
@@ -1006,7 +1012,8 @@ void kernelServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_fileSystem_write_file_response response;
 		response.header.operationIdentifier = FILESYSTEM_WRITE_FILE_RESPONSE;
 
-		fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		response.bytesWritten = fs_writeFile(fs_getFullPathFromFileName(request->path),request->offset,request->size,request->buffer);
+		send(kernelFileDescriptor,&response,sizeof(ipc_struct_fileSystem_write_file_response),0);
 
 		break;
 	}
@@ -1037,7 +1044,6 @@ char *fs_getFullPathFromFileName(char *file){
 	return fullPath;
 
 }
-
 int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 	int iterator = strlen(filePath);
@@ -1065,7 +1071,6 @@ int fs_createSubDirectoriesFromFilePath(char *filePath){
 
 
 }
-
 void fs_createPreviousFolders(const char *dir) {
         char tmp[256];
         char *p = NULL;
@@ -1105,21 +1110,26 @@ int main(int argc, char **argv) {
 
 
 	//fs_createSubDirectoriesFromFilePath("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
-	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
+//	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+//	fs_createFile("/mnt/SADICA_FS/Archivos/test/prueba2.bin");
+//
+//	fs_validateFile("/prueba1.bin");
+<<<<<<< HEAD
 
-	fs_validateFile("/prueba1.bin");
 
-
-	char *bafer = string_new();
-	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
-	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
-	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
-	puts(read);
-	free(read);
-	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
-	free(read);
-    //fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
+=======
+//
+//
+>>>>>>> branch 'master' of git@github.com:sisoputnfrba/tp-2017-1c-Deus-Vult.git
+//	char *bafer = string_new();
+//	string_append(&bafer,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc mi mauris, suscipit euismod leo vitae, tempor sagittis elit nullam.");
+//	fs_writeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin",0,strlen(bafer),bafer);
+//	char *read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 0, 64);
+//	puts(read);
+//	free(read);
+//	read = fs_readFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin", 60, 68);
+//	free(read);
+//    fs_removeFile("/mnt/SADICA_FS/Archivos/test/prueba1.bin");
 
 	return EXIT_SUCCESS;
 

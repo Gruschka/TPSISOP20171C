@@ -107,7 +107,7 @@ uint32_t cpu_start(t_CPU *CPU){
 	CPU->connections[T_KERNEL].server = 0;
 	CPU->connections[T_KERNEL].socketFileDescriptor = 0;
 	CPU->connections[T_KERNEL].status = DISCONNECTED;
-	CPU->connections[T_MEMORY].host = "192.168.1.124";
+	CPU->connections[T_MEMORY].host = "127.0.0.1";
 	CPU->connections[T_MEMORY].portNumber = 5003;
 	CPU->connections[T_MEMORY].server = 0;
 	CPU->connections[T_MEMORY].socketFileDescriptor = 0;
@@ -269,7 +269,7 @@ uint32_t cpu_declareVariable(char variableName){
 }
 void cpu_endProgram(){
 	log_debug(logger,"endProgram");
-	myCPU.status = FINISHED;
+	myCPU.status = WAITING;
 	myCPU.instructionPointer = 0;
 	myCPU.variableCounter = 0;
 	pcb_dump(myCPU.assignedPCB);
@@ -605,7 +605,6 @@ ipc_struct_kernel_close_file_response ipc_sendKernelCloseFile(int fd, int fileDe
 	send(fd, buffer, bufferSize, 0);
 
 	ipc_struct_kernel_close_file_response response;
-	recv(fd, &response, sizeof(ipc_struct_kernel_close_file_response), 0);
 
 	return response;
 
@@ -643,7 +642,7 @@ ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd,
 
 }
 ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDescriptor, int size, char *content){
-	int bufferSize = sizeof(ipc_struct_kernel_write_file) + strlen(content) +1;
+	int bufferSize = sizeof(ipc_struct_kernel_write_file) + size +1;
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
 
@@ -651,6 +650,7 @@ ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDe
 	ipc_struct_kernel_write_file request;
 
 	request.header.operationIdentifier = KERNEL_WRITE_FILE;
+	request.pid = myCPU.assignedPCB->pid;
 	request.fileDescriptor = fileDescriptor;
 	request.size = size;
 	request.buffer = strdup(content);
@@ -658,13 +658,16 @@ ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDe
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
 
+	memcpy(buffer+bufferOffset,&request.pid,sizeof(int));
+	bufferOffset += sizeof(int);
+
 	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
 	bufferOffset += sizeof(int);
 
 	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
 	bufferOffset += sizeof(int);
 
-	memcpy(buffer+bufferOffset,&request.buffer,strlen(content)+1);
+	memcpy(buffer+bufferOffset,&request.buffer,size+1);
 	bufferOffset += strlen(content)+1;
 	free(request.buffer);
 
@@ -685,6 +688,7 @@ ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDesc
 	ipc_struct_kernel_read_file request;
 
 	request.header.operationIdentifier = KERNEL_READ_FILE;
+	request.pid = myCPU.assignedPCB->pid;
 	request.fileDescriptor = fileDescriptor;
 	request.size = size;
 	request.valuePointer = valuePointer;
@@ -692,6 +696,9 @@ ipc_struct_kernel_read_file_response ipc_sendKernelReadFile(int fd, int fileDesc
 
 	memcpy(buffer+bufferOffset,&request.header,sizeof(ipc_header));
 	bufferOffset += sizeof(ipc_header);
+
+	memcpy(buffer+bufferOffset,&request.pid,sizeof(int));
+	bufferOffset += sizeof(int);
 
 	memcpy(buffer+bufferOffset,&request.fileDescriptor,sizeof(int));
 	bufferOffset += sizeof(int);
