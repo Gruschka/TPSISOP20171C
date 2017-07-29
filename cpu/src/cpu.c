@@ -642,7 +642,7 @@ ipc_struct_kernel_move_file_cursor_response ipc_sendKernelMoveFileCursor(int fd,
 
 }
 ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDescriptor, int size, char *content){
-	int bufferSize = sizeof(ipc_struct_kernel_write_file) + strlen(content) +1;
+	int bufferSize = sizeof(ipc_struct_kernel_write_file) + size +1;
 	char *buffer = malloc(bufferSize);
 	memset(buffer,0,bufferSize);
 
@@ -667,7 +667,7 @@ ipc_struct_kernel_write_file_response ipc_sendKernelWriteFile(int fd, int fileDe
 	memcpy(buffer+bufferOffset,&request.size,sizeof(int));
 	bufferOffset += sizeof(int);
 
-	memcpy(buffer+bufferOffset,&request.buffer,strlen(content)+1);
+	memcpy(buffer+bufferOffset,&request.buffer,size+1);
 	bufferOffset += strlen(content)+1;
 	free(request.buffer);
 

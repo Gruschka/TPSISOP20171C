@@ -30,7 +30,7 @@ int fs_connectToFileSystem() {
 		return -1;
 	}
 
-	server = gethostbyname("127.0.0.1");
+	server = gethostbyname("192.168.1.106");
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	bcopy((char *) server->h_addr,(char *)&serv_addr.sin_addr.s_addr, server->h_length);
