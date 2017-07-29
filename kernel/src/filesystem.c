@@ -52,6 +52,7 @@ int fs_connectToFileSystem() {
 
 	log_debug(logger, "[fileSystem] connected. block size: %d", response->info);
 
+	free(response);
 	return 0;
 }
 
@@ -166,7 +167,9 @@ int fs_openFile(int pid, char *path, char *permissionsString) {
 
 	send(fileSystem_sockfd, buffer, bufferSize, 0);
 
+	free(pathCopy);
 	free(request);
+	free(buffer);
 
 	ipc_struct_fileSystem_validate_file_response response;
 	recv(fileSystem_sockfd, &response, sizeof(ipc_struct_fileSystem_validate_file_response), 0);
@@ -252,6 +255,7 @@ void fs_moveCursor(int pid, int fd, int offset) {
 	fs_pft *pft = pft_find(pid);
 	fs_pft_entry *entry = pft_findEntry(pft, fd);
 
+	if (entry == NULL) return;
 	entry->position = offset;
 }
 

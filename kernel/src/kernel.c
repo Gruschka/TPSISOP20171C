@@ -178,6 +178,7 @@ int connectToMemory() {
 	}
 
 	log_debug(logger, "[memory] connected. page size: %d", response->info);
+	free(response);
 
 	return 0;
 }
@@ -375,9 +376,11 @@ int main(int argc, char **argv) {
 
 	showMenu();
 
-	pthread_join(consolesServerThread, NULL );
-	pthread_join(schedulerThread, NULL );
-	pthread_join(dispatcherThread, NULL );
+	pthread_detach(consolesServerThread);
+	pthread_detach(schedulerThread);
+	pthread_detach(dispatcherThread);
+	pthread_detach(cpusServerThread);
+	pthread_detach(configurationWatcherThread);
 
 	return EXIT_SUCCESS;
 }
@@ -428,6 +431,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
 		ipc_server_sendHandshakeResponse(fd, 1, 0);
+		free(handshake);
 		break;
 	}
 	case PROGRAM_START: {
@@ -448,6 +452,7 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		if (memory_sendInitProgram(pid, numberOfPages) == -1) {
 			//FIXME: MANEJAR ERROR
 			log_error(logger, "fallo el init program");
+			free(codeString);
 			break;
 		}
 
@@ -473,20 +478,17 @@ void consolesServerSocket_handleDeserializedStruct(int fd,
 		console->pid = newProgram->pid;
 		list_add(activeConsoles, console);
 		executeNewProgram(newProgram);
-
+		free(codeString);
+		free(programStart->code);
+		free(programStart);
 		break;
 	}
 	case PROGRAM_FINISH: {
 		ipc_struct_program_finish *programFinish = buffer;
 		log_info(logger, "PROGRAM_FINISH. fd: %d. pid: %d", fd, programFinish->pid);
-		pthread_mutex_lock(&readyQueue_mutex);
-		t_PCB *pcb = findPCB(readyQueue, programFinish->pid);
-		if (pcb != NULL) {
-			removePCB(readyQueue, pcb);
-		}
-		// todo: revisar las otras listas
-		pthread_mutex_unlock(&readyQueue_mutex);
-		//TODO: enviarle a la memoria para liberar los recursos
+		int pid = programFinish->pid;
+		free(programFinish);
+		finishProgram(pid, -7);
 		break;
 	}
 	default:
@@ -674,6 +676,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "Handshake received. Process identifier: %s",
 				processName(handshake->processIdentifier));
 		ipc_server_sendHandshakeResponse(fd, 1, configuration->stackSize);
+		free(handshake);
 		break;
 	}
 	case GET_SHARED_VARIABLE: {
@@ -686,6 +689,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.value = getSharedVariableValue(request->identifier);
 
 		send(fd, &response, sizeof(ipc_struct_get_shared_variable_response), 0);
+		free(request);
 		break;
 	}
 	case KERNEL_ALLOC_HEAP: {
@@ -755,6 +759,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.offset = offset;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
+		free(request);
 		break;
 	}
 	case KERNEL_DEALLOC_HEAP: {
@@ -785,11 +790,12 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.success = success;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_dealloc_heap_response), 0);
-
+		free(request);
 		break;
 	}
 	case PROGRAM_FINISH: {
 		log_info(logger, "New program finish. fd: %d", fd);
+		free(buffer);
 		break;
 	}
 	case KERNEL_SEMAPHORE_WAIT: {
@@ -811,6 +817,9 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 			blockQueue_addProcess(waitPCB);
 			pthread_mutex_unlock(&execList_mutex);
 		}
+		free(wait->identifier);
+		free(wait->pcb);
+		free(wait);
 		break;
 	}
 	case KERNEL_SEMAPHORE_SIGNAL: {
@@ -818,6 +827,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		log_info(logger, "kernel_semaphore_signal. identifier: %s", signal->identifier);
 		kernel_semaphore *sem = getSemaphoreByIdentifier(signal->identifier);
 		kernel_semaphore_signal(sem, NULL);
+		free(signal);
 		break;
 	}
 	case KERNEL_OPEN_FILE: {
@@ -834,8 +844,8 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		fs_openFile(openFile->pid,openFile->path,openFile->flags);
 
 		send(fd, &response, sizeof(ipc_struct_kernel_open_file_response), 0);
-
-
+		free(openFile->path);
+		free(openFile);
 		break;
 	}
 	case KERNEL_WRITE_FILE: {
@@ -848,7 +858,8 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 
 		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
-
+		free(write->buffer);
+		free(write);
 		break;
 	}
 	case KERNEL_READ_FILE: {
@@ -856,6 +867,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 
 		log_debug(logger, "KERNEL_READ_FILE: FD %d. size: %d", readFile->fileDescriptor, readFile->size);
 
+		free(readFile);
 		break;
 	}
 	case KERNEL_MOVE_FILE_CURSOR: {
@@ -866,6 +878,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		response.header.operationIdentifier = KERNEL_MOVE_FILE_CURSOR_RESPONSE;
 		response.success = 1;
 		send(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
+		free(moveFileCursor);
 		break;
 	}
 	default:
@@ -935,6 +948,7 @@ void sendExecutePCB(int fd, t_PCB *pcb, int quantum) {
 
 	send(fd, buffer, totalSize, 0);
 
+	free(header);
 	free(pcbBuffer);
 	free(buffer);
 }
@@ -1042,6 +1056,7 @@ t_PCB *createPCBFromScript(char *script) {
 	PCB->sp = PCB->codePages +1 * pageSize;
 	PCB->stackIndex = NULL;
 
+	free(program);
 	return PCB;
 }
 

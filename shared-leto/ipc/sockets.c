@@ -210,7 +210,9 @@ int createServer(char *port, EpollConnectionEventHandler newConnectionHandler, E
               if (count == sizeof(ipc_header)) {
             	  ipc_header *header = malloc(sizeof(ipc_header));
             	  memcpy(header, buffer, sizeof(ipc_header));
+            	  free(buffer);
             	  incomingDataHandler(events[i].data.fd, *header);
+            	  free(header);
               } else if (count == 0) {
             	  disconnectionHandler(events[i].data.fd);
               } else {

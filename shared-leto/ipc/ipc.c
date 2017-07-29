@@ -33,6 +33,7 @@ int ipc_createServer(char *port,
 			ipc_header *header = malloc(sizeof(ipc_header));
 			recv(fd, header, sizeof(ipc_header), 0);
 			programStart->header = *header;
+			free(header);
 
 			uint32_t codeLength;
 			recv(fd, &codeLength, sizeof(uint32_t), 0);
@@ -176,6 +177,7 @@ int ipc_createServer(char *port,
 			openFile->path = path;
 			openFile->pathLength = pathLength;
 
+			free(header);
 			deserializedStructHandler(fd, openFile->header.operationIdentifier,
 					openFile);
 			break;
@@ -210,6 +212,7 @@ int ipc_createServer(char *port,
 			writeFile->fileDescriptor = fileDescriptor;
 			writeFile->buffer = buffer;
 
+			free(header);
 			deserializedStructHandler(fd, writeFile->header.operationIdentifier, writeFile);
 			break;
 		}
@@ -495,4 +498,5 @@ void ipc_client_sendMemoryWrite(int fd, int pid, int pageNumber, int offset,
 					+ sizeof(int), buffer, size);
 
 	send(fd, buf, totalSize, 0);
+	free(buf);
 }
