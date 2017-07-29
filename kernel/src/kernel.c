@@ -555,6 +555,8 @@ typedef struct heap_metadata  {
 	char isFree;
 } heap_metadata;
 
+pthread_rwlock_t heapRwlock;
+
 int heap_getOffsetForAvailableMetadata(heap_page_assignment *assignment, int32_t neededSize) {
 	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize);
 	void *page = ipc_client_waitMemoryReadResponse(memory_sockfd)->buffer;
@@ -607,7 +609,6 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 	ipc_client_sendMemoryRead(memory_sockfd, assignment->processID, assignment->processPageNumber, 0, pageSize);
 	void *page = ipc_client_waitMemoryReadResponse(memory_sockfd)->buffer;
 	if (page == NULL) {
-		//fixme manejar
 		return 0;
 	}
 
@@ -667,6 +668,95 @@ int heap_freeMetadata(heap_page_assignment *assignment, int32_t offset) {
 	return 1;
 }
 
+typedef struct heap_alloc_tuple  {
+	heap_page_assignment *assignment;
+	int offset;
+} heap_alloc_tuple;
+
+heap_alloc_tuple heap_alloc(int32_t processID, int32_t numberOfBytes) {
+	pthread_rwlock_wrlock(&heapRwlock);
+
+	heap_page_assignment *assignment = NULL;
+	int offset = -1;
+	int i;
+	for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+		heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+		if (a->processID == processID && a->availableBytes >= (numberOfBytes + sizeof(heap_metadata))) {
+			int o = heap_getOffsetForAvailableMetadata(a, numberOfBytes);
+			if (o != -1) {
+				offset = o;
+				assignment = a;
+				break;
+			}
+		}
+	}
+
+	if (assignment == NULL || offset == -1) {
+		// Si es NULL, entonces no queda ninguna página de heap
+		// para este proceso, que le queden disponibles X
+		// bytes contiguos disponibles para almacenar lo pedido.
+		// Entonces, se pide una nueva página a la memoria
+		int pageNumber = memory_sendRequestMorePages(processID, 1);
+		if (pageNumber == -1) {
+			pthread_rwlock_unlock(&heapRwlock);
+			free(assignment);
+			heap_alloc_tuple tuple = { NULL, -1 };
+			return tuple;
+		}
+
+		// El pedido fue exitoso, generamos un registro de la asignación
+		// y lo agregamos a la lista
+		assignment = malloc(sizeof(heap_page_assignment));
+		assignment->processID = processID;
+		assignment->processPageNumber = pageNumber;
+		assignment->availableBytes = pageSize;
+
+		heap_metadata *heap_metadata = malloc(sizeof(heap_metadata));
+		heap_metadata->isFree = 1;
+		heap_metadata->size = pageSize - sizeof(heap_metadata);
+		ipc_client_sendMemoryWrite(memory_sockfd, processID, pageNumber, 0, sizeof(heap_metadata), heap_metadata);
+		ipc_struct_memory_write_response response;
+		recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
+		if (response.success == 0) {
+			pthread_rwlock_unlock(&heapRwlock);
+			free(assignment);
+			heap_alloc_tuple tuple = { NULL, -1 };
+			return tuple;
+		}
+		free(heap_metadata);
+		list_add(heap_page_assignments_list, assignment);
+		offset = 0 + sizeof(heap_metadata);
+	}
+
+	pthread_rwlock_unlock(&heapRwlock);
+	heap_alloc_tuple tuple = { assignment, offset };
+	return tuple;
+}
+
+int heap_dealloc(int32_t processID, int32_t processPageNumber, int32_t offset) {
+	pthread_rwlock_wrlock(&heapRwlock);
+
+	heap_page_assignment *assignment;
+
+	int i;
+	for (i = 0; i < list_size(heap_page_assignments_list); i++) {
+		heap_page_assignment *a = list_get(heap_page_assignments_list, i);
+		if (a->processID == processID && a->processPageNumber == processPageNumber) {
+			assignment = a;
+			break;
+		}
+	}
+
+	if (assignment == NULL) {
+		pthread_rwlock_unlock(&heapRwlock);
+		return 0;
+	}
+
+	int success = heap_freeMetadata(assignment, offset);
+	pthread_rwlock_unlock(&heapRwlock);
+	return success;
+}
+
 ///////////////////////////// CPUs server /////////////////////////////////
 void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_operationIdentifier operationId, void *buffer) {
@@ -696,67 +786,23 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_alloc_heap *request = buffer;
 		log_info(logger, "KERNEL_ALLOC_HEAP. processID: %d; numberOfBytes: %d", request->processID, request->numberOfBytes);
 
-		heap_page_assignment *assignment = NULL;
-		int offset = -1;
-
-		int i;
-		for (i = 0; i < list_size(heap_page_assignments_list); i++) {
-			heap_page_assignment *a = list_get(heap_page_assignments_list, i);
-			if (a->processID == request->processID && a->availableBytes >= (request->numberOfBytes + sizeof(heap_metadata))) {
-				int o = heap_getOffsetForAvailableMetadata(a, request->numberOfBytes);
-				if (o != -1) {
-					offset = o;
-					assignment = a;
-					break;
-				}
-			}
-		}
-
-		if (assignment == NULL || offset == -1) {
-			// Si es NULL, entonces no queda ninguna página de heap
-			// para este proceso, que le queden disponibles X
-			// bytes contiguos disponibles para almacenar lo pedido.
-			// Entonces, se pide una nueva página a la memoria
-			int pageNumber = memory_sendRequestMorePages(request->processID, 1);
-			if (pageNumber == -1) {
-				// Error de la memoria: hago rethrows
-				ipc_struct_kernel_alloc_heap_response response;
-				response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
-				response.success = 0;
-				response.pageNumber = -1;
-				response.offset = -1;
-				send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
-				return;
-			}
-
-			// El pedido fue exitoso, generamos un registro de la asignación
-			// y lo agregamos a la lista
-			assignment = malloc(sizeof(heap_page_assignment));
-			assignment->processID = request->processID;
-			assignment->processPageNumber = pageNumber;
-			assignment->availableBytes = pageSize;
-
-			heap_metadata *heap_metadata = malloc(sizeof(heap_metadata));
-			heap_metadata->isFree = 1;
-			heap_metadata->size = pageSize - sizeof(heap_metadata);
-			ipc_client_sendMemoryWrite(memory_sockfd, request->processID, pageNumber, 0, sizeof(heap_metadata), heap_metadata);
-			ipc_struct_memory_write_response response;
-			recv(memory_sockfd, &response, sizeof(ipc_struct_memory_write_response), 0);
-			if (response.success == 0) {
-				//fixme manejar error
-				return;
-			}
-			free(heap_metadata);
-			list_add(heap_page_assignments_list, assignment);
-			offset = 0 + sizeof(heap_metadata);
+		heap_alloc_tuple tuple = heap_alloc(request->processID, request->numberOfBytes);
+		if (tuple.assignment == NULL || tuple.offset == -1) {
+			// Error de la memoria: hago rethrows
+			ipc_struct_kernel_alloc_heap_response response;
+			response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
+			response.success = 0;
+			response.pageNumber = -1;
+			response.offset = -1;
+			send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
 		}
 
 		// Ya tengo la asignación indicada y un offset
 		ipc_struct_kernel_alloc_heap_response response;
 		response.header.operationIdentifier = KERNEL_ALLOC_HEAP_RESPONSE;
 		response.success = 1;
-		response.pageNumber = assignment->processPageNumber;
-		response.offset = offset;
+		response.pageNumber = tuple.assignment->processPageNumber;
+		response.offset = tuple.offset;
 
 		send(fd, &response, sizeof(ipc_struct_kernel_alloc_heap_response), 0);
 		free(request);
@@ -766,24 +812,7 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_dealloc_heap *request = buffer;
 		log_info(logger, "KERNEL_DEALLOC_HEAP. processID: %d; pageNumber: %d; offset: %d.", request->processID, request->pageNumber, request->offset);
 
-		heap_page_assignment *assignment;
-
-		int i;
-		for (i = 0; i < list_size(heap_page_assignments_list); i++) {
-			heap_page_assignment *a = list_get(heap_page_assignments_list, i);
-			if (a->processID == request->processID && a->processPageNumber == request->pageNumber) {
-				assignment = a;
-				break;
-			}
-		}
-
-		if (assignment == NULL) {
-			// No se encontró alloc que corresponda con el pedido de dealloc
-			//fixme manejar error
-			return;
-		}
-
-		int success = heap_freeMetadata(assignment, request->offset);
+		int success = heap_dealloc(request->processID, request->pageNumber, request->offset);
 
 		ipc_struct_kernel_dealloc_heap_response response;
 		response.header.operationIdentifier = KERNEL_DEALLOC_HEAP_RESPONSE;
@@ -1061,7 +1090,8 @@ t_PCB *createPCBFromScript(char *script) {
 }
 
 void finishProgram(int pid, int exitCode) {
-	ipc_client_sendFinishProgram(memory_sockfd, pid);
+	memory_sendDeinitProgram(pid);
+
 	t_PCB *pcb = NULL;
 
 	pthread_mutex_lock(&readyQueue_mutex);
