@@ -68,3 +68,5 @@ debug.txt
 cache_dump.txt
 pages_table_dump.txt
 process_memory_dump.txt
+
+build/
