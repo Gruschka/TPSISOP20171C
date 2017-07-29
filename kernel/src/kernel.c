@@ -881,14 +881,14 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_write_file *write = buffer;
 
 		log_debug(logger, "KERNEL_WRITE_FILE: FD %d. size: %d", write->fileDescriptor, write->size);
+		fs_writeFile(write->pid,write->fileDescriptor,0,write->size,write->buffer);
 		ipc_struct_kernel_write_file_response response;
 		response.header.operationIdentifier = KERNEL_WRITE_FILE_RESPONSE;
 		response.success = 1;
 
 
 		send(fd, &response, sizeof(ipc_struct_kernel_write_file_response), 0);
-		free(write->buffer);
-		free(write);
+
 		break;
 	}
 	case KERNEL_READ_FILE: {
