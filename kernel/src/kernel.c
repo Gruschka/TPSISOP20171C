@@ -862,6 +862,10 @@ void cpusServerSocket_handleDeserializedStruct(int fd,
 		ipc_struct_kernel_move_file_cursor *moveFileCursor = buffer;
 		log_debug(logger, "KERNEL_MOVE_FILE_CURSOR: FD: %d. PID: %d. Position: %d", moveFileCursor->fileDescriptor, moveFileCursor->pid, moveFileCursor->position);
 		fs_moveCursor(moveFileCursor->pid, moveFileCursor->fileDescriptor, moveFileCursor->position);
+		ipc_struct_kernel_move_file_cursor_response response;
+		response.header.operationIdentifier = KERNEL_MOVE_FILE_CURSOR_RESPONSE;
+		response.success = 1;
+		send(fd, &response, sizeof(ipc_struct_kernel_move_file_cursor_response), 0);
 		break;
 	}
 	default:
